@@ -92,7 +92,8 @@ class ManagerScreenTest {
         compose.onNodeWithTag("setup-screen").assertExists()
         compose.onNodeWithText("Grayzen is ready.").assertDoesNotExist()
         compose.onNodeWithText("Two small steps", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Usage Access is needed only for timed grayscale", substring = true).assertExists()
+        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-usage-access"))
+        compose.onNodeWithText("Needed for daily time limits", substring = true).assertExists()
         compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("information-block"))
         compose.onNodeWithTag("information-block").assertExists()
         compose.onNodeWithText("For Your Information").assertExists()
@@ -220,22 +221,33 @@ class ManagerScreenTest {
     }
 
     @Test fun positiveDelayWithoutUsageAccessShowsBanner() {
-        setContent(snapshot().copy(defaultGrayAfterMinutes = 10))
+        setContent(snapshot(selected = setOf("browser")).copy(defaultGrayAfterMinutes = 10))
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("grayscale-control-screen")
             .performScrollToNode(hasTestTag("manager-error"))
-        compose.onNodeWithText("Usage Access", substring = true).assertExists()
+        compose.onNodeWithText("Timed grayscale needs Usage Access. Open Setup.").assertExists()
+    }
+
+    @Test fun positiveDelayWithoutCheckedAppsNeedsNoUsageAccess() {
+        setContent(snapshot().copy(defaultGrayAfterMinutes = 10))
+        compose.onNodeWithTag("feature-grayscale").performClick()
+        compose.onNodeWithTag("manager-error").assertDoesNotExist()
     }
 
     @Test fun positiveDelayWithUsageAccessShowsNoBanner() {
-        setContent(snapshot().copy(defaultGrayAfterMinutes = 10, usageAccessGranted = true))
+        setContent(
+            snapshot(selected = setOf("browser")).copy(
+                defaultGrayAfterMinutes = 10,
+                usageAccessGranted = true,
+            )
+        )
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("manager-error").assertDoesNotExist()
     }
 
     @Test fun inactiveRuntimeUsageErrorIsHidden() {
         setContent(
-            snapshot().copy(
+            snapshot(selected = setOf("browser")).copy(
                 defaultGrayAfterMinutes = 10,
                 usageAccessGranted = true,
                 managerEnabled = false,
@@ -248,7 +260,7 @@ class ManagerScreenTest {
 
     @Test fun snoozedRuntimeUsageErrorIsHidden() {
         setContent(
-            snapshot().copy(
+            snapshot(selected = setOf("browser")).copy(
                 defaultGrayAfterMinutes = 10,
                 usageAccessGranted = true,
                 managerEnabled = true,
@@ -263,7 +275,7 @@ class ManagerScreenTest {
 
     @Test fun activeRuntimeUsageErrorIsShown() {
         setContent(
-            snapshot().copy(
+            snapshot(selected = setOf("browser")).copy(
                 defaultGrayAfterMinutes = 10,
                 usageAccessGranted = true,
                 managerEnabled = true,
@@ -296,17 +308,20 @@ class ManagerScreenTest {
         assertEquals("browser" to null, saved)
     }
 
-    @Test fun whitelistedAppHasNoTimer() {
+    @Test fun exceptSelectedShowsTimersOnlyForCheckedApps() {
         setContent(
             snapshot(selected = setOf("browser")).copy(
                 policy = Policy.EXCEPT_SELECTED,
+                defaultGrayAfterMinutes = 10,
                 grayAfterMinutes = mapOf("browser" to 15),
             ),
-            apps = listOf(app("Browser", "browser")),
+            apps = listOf(app("Browser", "browser"), app("Camera", "camera")),
         )
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("app:browser").performScrollTo()
-        compose.onNodeWithTag("app-timer:browser").assertDoesNotExist()
+        compose.onNodeWithTag("app-timer:browser").assertExists()
+        compose.onNodeWithTag("app:camera").performScrollTo()
+        compose.onNodeWithTag("app-timer:camera").assertDoesNotExist()
     }
 
     @Test fun searchUsesLabelAndPackageAndSelectionIsImmediate() {
@@ -358,7 +373,7 @@ class ManagerScreenTest {
         )
         compose.onNodeWithTag("feature-auto-snooze").performScrollTo().performClick()
         compose.onNodeWithTag("app:vault").performClick()
-        compose.onNodeWithText("Recovery notifications are unavailable", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Notifications are off", substring = true).assertIsDisplayed()
     }
 
     @Test fun autoSnoozeDisableSnackbarAndOpenSafelyWork() {

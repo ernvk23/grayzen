@@ -114,7 +114,7 @@ class ManagerController private constructor(private val context: Context) : Mana
                 ),
                 grayAfterMinutes = parseGrayAfter(
                     preferences.getStringSet("grayAfterMinutes", emptySet())!!.toSet()
-                ).filterKeys { isGrayscaleTarget(policy, selectedPackages, it) },
+                ).filterKeys { isTimedTarget(selectedPackages, it) },
                 settleDelayMs = sanitizeForegroundTimingMs(
                     preferences.getInt("settleDelayMs", DEFAULT_BURST_MS)
                 ),

@@ -5,13 +5,22 @@ import java.time.ZoneId
 
 enum class Policy { ONLY_SELECTED, EXCEPT_SELECTED }
 
-internal fun isGrayscaleTarget(
-    policy: Policy,
+internal fun isTimedTarget(
     selectedPackages: Set<String>,
     packageName: String,
-): Boolean = when (policy) {
-    Policy.ONLY_SELECTED -> packageName in selectedPackages
-    Policy.EXCEPT_SELECTED -> packageName !in selectedPackages
+): Boolean = packageName in selectedPackages
+
+/** Null means the app stays in color; zero means immediate grayscale. */
+internal fun grayscaleDelayMinutes(
+    policy: Policy,
+    selectedPackages: Set<String>,
+    overrideMinutes: Int?,
+    defaultMinutes: Int,
+    packageName: String,
+): Int? = when {
+    packageName in selectedPackages -> overrideMinutes ?: defaultMinutes
+    policy == Policy.EXCEPT_SELECTED -> 0
+    else -> null
 }
 
 private const val PERMISSION_ERROR = "Missing secure-settings permission. Run the ADB setup."
@@ -126,7 +135,7 @@ class PolicyEngine(
 
     fun setPolicy(policy: Policy) {
         val overrides = state.grayAfterMinutes.filterKeys {
-            isGrayscaleTarget(policy, state.selectedPackages, it)
+            isTimedTarget(state.selectedPackages, it)
         }
         save(state.copy(policy = policy, grayAfterMinutes = overrides))
         checkPrerequisites()
@@ -136,7 +145,7 @@ class PolicyEngine(
     fun setSelected(packages: Set<String>) {
         val selected = packages - ownPackage
         val overrides = state.grayAfterMinutes.filterKeys {
-            isGrayscaleTarget(state.policy, selected, it)
+            isTimedTarget(selected, it)
         }
         save(state.copy(selectedPackages = selected, grayAfterMinutes = overrides))
         checkPrerequisites()
@@ -161,7 +170,7 @@ class PolicyEngine(
     fun setGrayAfterMinutes(packages: Map<String, Int>) {
         val sanitized = packages
             .filterKeys {
-                it.isNotBlank() && isGrayscaleTarget(state.policy, state.selectedPackages, it)
+                it.isNotBlank() && isTimedTarget(state.selectedPackages, it)
             }
             .mapValues { (_, minutes) -> minutes.coerceIn(0, MAX_GRAY_AFTER_MINUTES) }
         save(state.copy(grayAfterMinutes = sanitized))
@@ -315,13 +324,21 @@ class PolicyEngine(
             setUsageError(null)
         }
         val target = foregroundTarget ?: return
-        val grayscale = target != ownPackage &&
-            isGrayscaleTarget(state.policy, state.selectedPackages, target)
-        if (!grayscale) {
+        if (target == ownPackage) {
             applyGrayscale(false)
             return
         }
-        val minutes = state.grayAfterMinutes[target] ?: state.defaultGrayAfterMinutes
+        val minutes = grayscaleDelayMinutes(
+            policy = state.policy,
+            selectedPackages = state.selectedPackages,
+            overrideMinutes = state.grayAfterMinutes[target],
+            defaultMinutes = state.defaultGrayAfterMinutes,
+            packageName = target,
+        )
+        if (minutes == null) {
+            applyGrayscale(false)
+            return
+        }
         val allowanceSeconds = minutes.coerceAtLeast(0) * 60L
         if (allowanceSeconds <= 0L) {
             applyGrayscale(true)

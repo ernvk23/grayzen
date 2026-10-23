@@ -134,21 +134,16 @@ class OffStateColorCorrectionTest {
         assertFalse(store.state.ownsColorCorrection)
     }
 
-    @Test fun bothPoliciesAndOwnInterfaceUseSavedCorrectionForColorDestinations() {
+    @Test fun bothPoliciesUseSavedCorrectionForOwnInterface() {
         for (policy in Policy.entries) {
             val engine = engine()
             engine.setSelected(setOf("selected"))
             engine.setPolicy(policy)
             engine.setEnabled(true)
-            val grayscaleApp = if (policy == Policy.ONLY_SELECTED) "selected" else "other"
-            val colorApp = if (policy == Policy.ONLY_SELECTED) "other" else "selected"
-            engine.onForeground(grayscaleApp, true)
+            engine.onForeground("selected", true)
             assertEquals(0, access.values[SecureGrayscaleSettings.MODE])
             assertEquals(1, access.values[SecureGrayscaleSettings.ENABLED])
 
-            engine.onForeground(colorApp, true)
-            assertEquals(12, access.values[SecureGrayscaleSettings.MODE])
-            assertEquals(1, access.values[SecureGrayscaleSettings.ENABLED])
             engine.onForeground("manager", true)
             assertEquals(12, access.values[SecureGrayscaleSettings.MODE])
             assertEquals(1, access.values[SecureGrayscaleSettings.ENABLED])

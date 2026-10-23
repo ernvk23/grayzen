@@ -134,23 +134,32 @@ class PolicyEngineTest {
         assertEquals(listOf(true, false, true), settings.writes)
     }
 
-    @Test fun exceptSelectedAlwaysKeepsManagerInColor() {
-        start(Policy.EXCEPT_SELECTED)
-        engine.onForeground("other", true)
-        engine.onForeground("selected", true)
-        engine.onForeground("other", true)
-        engine.onForeground("manager", false)
-        assertEquals(listOf(true, false, true, false), settings.writes)
-        engine.setSelected(setOf("manager"))
-        assertFalse("manager" in engine.state.selectedPackages)
+    @Test fun exceptSelectedGreysUncheckedImmediatelyAndTimesCheckedApps() {
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("other", true)
+        assertEquals(listOf(true), settings.writes)
+        assertEquals(0, sampler.calls)
+        assertNull(scheduler.action)
+
+        timed.onForeground("selected", true)
+        assertEquals(1, sampler.calls)
+        assertEquals(listOf(true, false), settings.writes)
+        assertNotNull(scheduler.action)
+
+        timed.setSelected(setOf("manager"))
+        assertFalse("manager" in timed.state.selectedPackages)
     }
 
     @Test fun configurationChangesApplyImmediately() {
-        start()
-        engine.onForeground("other", true)
-        engine.setSelected(setOf("other"))
-        engine.setPolicy(Policy.EXCEPT_SELECTED)
-        assertEquals(listOf(false, true, false), settings.writes)
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed)
+        timed.onForeground("other", true)
+        timed.setSelected(setOf("other"))
+        timed.onForeground("third", true)
+        timed.setPolicy(Policy.EXCEPT_SELECTED)
+        assertEquals(listOf(false, true), settings.writes)
+        assertNull(scheduler.action)
     }
 
     @Test fun masterOffAlwaysRestoresColor() {
@@ -207,17 +216,18 @@ class PolicyEngineTest {
     }
 
     @Test fun processRestartRetainsPolicyAndSelectionButWaitsForFreshEvent() {
-        start(Policy.EXCEPT_SELECTED)
-        engine.onForeground("other", true)
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false), settings.writes)
         val restarted = engine()
         restarted.onConnected()
         assertTrue(restarted.state.managerEnabled)
         assertEquals(Policy.EXCEPT_SELECTED, restarted.state.policy)
         assertEquals(setOf("selected", "also.selected"), restarted.state.selectedPackages)
         assertNull(restarted.state.lastRecognisedPackage)
-        assertEquals(listOf(true), settings.writes)
-        restarted.onForeground("selected", true)
-        assertEquals(listOf(true, false), settings.writes)
+        restarted.onForeground("other", true)
+        assertEquals(listOf(false, true), settings.writes)
     }
 
     @Test fun serviceDisconnectRestoresColorAndRetainsIntentUntilReconnect() {
@@ -477,31 +487,34 @@ class PolicyEngineTest {
         assertNull(scheduler.action)
     }
 
-    @Test fun selectingAnExceptionClearsItsOverride() {
+    @Test fun deselectingAnAppClearsItsOverride() {
         val timed = timedEngine()
-        start(timed, Policy.EXCEPT_SELECTED)
-        timed.setGrayAfterMinutes(mapOf("browser" to 15))
-        assertEquals(mapOf("browser" to 15), timed.state.grayAfterMinutes)
+        start(timed)
+        timed.setGrayAfterMinutes(mapOf("selected" to 15))
+        assertEquals(mapOf("selected" to 15), timed.state.grayAfterMinutes)
 
-        timed.setSelected(timed.state.selectedPackages + "browser")
+        timed.setSelected(timed.state.selectedPackages - "selected")
         assertTrue(timed.state.grayAfterMinutes.isEmpty())
     }
 
-    @Test fun policyChangeClearsOverridesForAppsLeavingTheTargetSet() {
+    @Test fun policyChangeKeepsOverridesForCheckedApps() {
         val timed = timedEngine()
-        start(timed, Policy.ONLY_SELECTED)
+        start(timed)
         timed.setGrayAfterMinutes(mapOf("selected" to 15))
         assertEquals(mapOf("selected" to 15), timed.state.grayAfterMinutes)
 
         timed.setPolicy(Policy.EXCEPT_SELECTED)
-        assertTrue(timed.state.grayAfterMinutes.isEmpty())
+        assertEquals(mapOf("selected" to 15), timed.state.grayAfterMinutes)
     }
 
-    @Test fun overridesForNonTargetsAreIgnored() {
+    @Test fun overridesForUncheckedAppsAreIgnored() {
         val timed = timedEngine()
         start(timed, Policy.EXCEPT_SELECTED)
-        timed.setGrayAfterMinutes(mapOf("selected" to 15))
+        timed.setGrayAfterMinutes(mapOf("unchecked" to 15))
         assertTrue(timed.state.grayAfterMinutes.isEmpty())
+
+        timed.setGrayAfterMinutes(mapOf("selected" to 15))
+        assertEquals(mapOf("selected" to 15), timed.state.grayAfterMinutes)
     }
 
     @Test fun resettingAllTimesAppliesImmediatelyAndLetsEveryAppInheritAgain() {
@@ -528,17 +541,24 @@ class PolicyEngineTest {
         assertNotNull(scheduler.action)
     }
 
-    @Test fun exceptSelectedChecksUnselectedAppsOnly() {
-        val timed = timedEngine()
+    @Test fun globalDelayOnlyAppliesToCheckedAppsInExceptSelected() {
+        sampler.provider = { sample(0) }
+        val timed = timedEngine(defaultMinutes = 5)
         start(timed, Policy.EXCEPT_SELECTED)
         timed.onForeground("other", true)
-        assertEquals(listOf(false), settings.writes)
-        assertNotNull(scheduler.action)
+        assertEquals(listOf(true), settings.writes)
+        assertEquals(0, sampler.calls)
+        assertNull(scheduler.action)
+
+        timed.setDefaultGrayAfterMinutes(20)
+        assertEquals(listOf(true), settings.writes)
+        assertEquals(0, sampler.calls)
+        assertNull(scheduler.action)
 
         timed.onForeground("selected", true)
-        assertEquals(listOf(false), settings.writes)
-        assertNull(scheduler.action)
+        assertEquals(listOf(true, false), settings.writes)
         assertEquals(1, sampler.calls)
+        assertEquals(1_170_000L, scheduler.delayMillis)
     }
 
     @Test fun twoAppsHaveIndependentAllowances() {
@@ -767,13 +787,16 @@ class PolicyEngineTest {
         assertEquals(listOf(true, false, true), settings.writes)
     }
 
-    @Test fun lockShowsLauncherGrayInExceptSelected() {
-        start(Policy.EXCEPT_SELECTED)
-        engine.onForeground("selected", true)
+    @Test fun lockGreysUncheckedLauncherImmediatelyInExceptSelected() {
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("selected", true)
         assertEquals(listOf(false), settings.writes)
+        assertNotNull(scheduler.action)
 
-        engine.onScreenOff("launcher")
+        timed.onScreenOff("launcher")
         assertEquals(listOf(false, true), settings.writes)
+        assertNull(scheduler.action)
     }
 
     @Test fun lockWithoutLauncherRestoresColor() {
@@ -1039,14 +1062,17 @@ class PolicyEngineTest {
         assertFalse(timed.state.managerEnabled)
     }
 
-    @Test fun policyChangeCancelsDelayedDestination() {
+    @Test fun policyChangeResamplesTheTimedDestination() {
+        sampler.provider = { sample(60) }
         val timed = timedEngine()
         start(timed)
         timed.onForeground("selected", true)
+        assertEquals(1, sampler.calls)
         assertNotNull(scheduler.action)
 
         timed.setPolicy(Policy.EXCEPT_SELECTED)
-        assertNull(scheduler.action)
+        assertEquals(2, sampler.calls)
+        assertNotNull(scheduler.action)
         assertEquals(listOf(false), settings.writes)
     }
 

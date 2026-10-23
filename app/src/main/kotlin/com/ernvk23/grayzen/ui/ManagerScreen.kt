@@ -142,7 +142,7 @@ import com.ernvk23.grayzen.SERVICE_ERROR
 import com.ernvk23.grayzen.R
 import com.ernvk23.grayzen.SnoozeCoordinator
 import com.ernvk23.grayzen.USAGE_ACCESS_ERROR
-import com.ernvk23.grayzen.isGrayscaleTarget
+import com.ernvk23.grayzen.isTimedTarget
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.pow
@@ -485,7 +485,7 @@ private fun HomeScreen(
             FeatureCard(
                 icon = R.drawable.ic_tabler_contrast_2_filled,
                 title = "Grayscale Control",
-                description = "Pick apps that turn grayscale.",
+                description = "Pick apps and set their grayscale delay.",
                 onClick = onGrayscale,
                 testTag = "feature-grayscale",
             )
@@ -789,8 +789,9 @@ private fun AppSelectionScreen(
     val visibleApps = remember(state.apps, state.query, selectedPackages, customPackages) {
         state.visibleApps(selectedPackages, customPackages)
     }
-    val hasPositiveDelay = manager.defaultGrayAfterMinutes > 0 ||
-        manager.grayAfterMinutes.values.any { it > 0 }
+    val hasPositiveDelay = manager.selectedPackages.any { packageName ->
+        (manager.grayAfterMinutes[packageName] ?: manager.defaultGrayAfterMinutes) > 0
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().widthIn(max = 720.dp)
             .testTag(if (snoozeMode) "auto-snooze-screen" else "grayscale-control-screen"),
@@ -804,8 +805,10 @@ private fun AppSelectionScreen(
                 Text(
                     if (snoozeMode) {
                         "Some apps dislike accessibility. Grayzen pauses its own permission for selected apps; use Open safely if detection fails."
+                    } else if (manager.policy == Policy.EXCEPT_SELECTED) {
+                        "Unchecked apps turn grayscale immediately; checked apps follow their delay."
                     } else {
-                        "Which apps should turn grayscale?"
+                        "Only checked apps turn grayscale, after their delay."
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (snoozeMode) GrayzenMuted else GrayzenText,
@@ -880,14 +883,14 @@ private fun AppSelectionScreen(
             }
         }
         items(visibleApps, key = { it.packageName }) { app ->
-            val targetsThisApp = app.packageName != manager.applicationId &&
-                isGrayscaleTarget(manager.policy, manager.selectedPackages, app.packageName)
+            val timedThisApp = app.packageName != manager.applicationId &&
+                isTimedTarget(manager.selectedPackages, app.packageName)
             AppRow(
                 app = app,
                 manager = manager,
                 snoozeMode = snoozeMode,
                 busy = state.mutating,
-                timerVisible = !snoozeMode && targetsThisApp,
+                timerVisible = !snoozeMode && timedThisApp,
                 timerMinutes = manager.grayAfterMinutes[app.packageName]
                     ?: manager.defaultGrayAfterMinutes,
                 timerOverridden = app.packageName in manager.grayAfterMinutes,
@@ -967,7 +970,7 @@ private fun DefaultTimerRow(minutes: Int, enabled: Boolean, changed: (Int) -> Un
         Column(Modifier.weight(1f)) {
             Text("Grayscale delay", style = MaterialTheme.typography.titleSmall)
             Text(
-                "default daily use; app-specific times override",
+                "default for checked apps; app-specific times override",
                 style = MaterialTheme.typography.bodySmall,
                 color = GrayzenMuted,
             )
