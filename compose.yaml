@@ -1,0 +1,16 @@
+services:
+  build:
+    # Android command-line tools are x86_64.
+    platform: linux/amd64
+    build:
+      context: docker
+    image: grayzen-build
+    working_dir: /workspace
+    environment:
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_USER_HOME: /workspace/.android
+      GRADLE_USER_HOME: /workspace/.docker-gradle
+    volumes:
+      - .:/workspace
+      - ./docker/sdk.properties:/workspace/local.properties:ro

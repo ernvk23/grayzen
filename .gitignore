@@ -1,13 +1,17 @@
 # Gradle / Android
 .gradle/
+.android/
+.docker-gradle/
 .kotlin/
 **/build/
 local.properties
+dist/
 
 # Signing
 .signing/
 *.jks
 *.keystore
+keystore.properties
 
 # Editor
 .vscode/

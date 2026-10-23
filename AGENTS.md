@@ -12,6 +12,7 @@ Native Android app (Kotlin, Compose) that applies Android Color correction from 
 ## Rules
 
 - No commits, pushes, or PRs unless asked.
+- Never commit keystores, `keystore.properties`, or signing secrets.
 - One delayed deadline: sample usage on entry and at the single deadline. No polling, ticks, ledger, parallel queries, or retry timer.
 - Secure-setting writes on the main thread; usage queries on the single worker.
 - Package-only foreground detection: no screen content, gestures, overlays, or foreground service.
