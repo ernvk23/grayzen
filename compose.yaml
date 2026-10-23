@@ -14,3 +14,4 @@ services:
     volumes:
       - .:/workspace
       - ./docker/sdk.properties:/workspace/local.properties:ro
+      - ./docker/gradle.properties:/workspace/gradle.properties:ro

@@ -18,7 +18,8 @@ RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
     && rm /tmp/cmdline-tools.zip
 
 RUN yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null \
-    && sdkmanager --sdk_root="$ANDROID_HOME" --install "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+    && sdkmanager --sdk_root="$ANDROID_HOME" --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null \
+    && chmod -R a+rwX "$ANDROID_HOME"
 
 RUN wget -q "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" -O /tmp/gradle.zip \
     && unzip -q /tmp/gradle.zip -d /opt \
