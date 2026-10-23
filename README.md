@@ -26,7 +26,13 @@ make docker-install
 
 Enable **Grayzen** in Accessibility settings after installing. Usage Access is optional, for timed grayscale.
 
-For a one-command dev setup, run `make dev-install` or `make docker-dev-install`; they also enable Usage Access and the accessibility service.
+For a manual install, grant secure settings once:
+
+```sh
+adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
+```
+
+`make dev-install` or `make docker-dev-install` handles this plus Usage Access and the accessibility service.
 
 ## Signing
 
