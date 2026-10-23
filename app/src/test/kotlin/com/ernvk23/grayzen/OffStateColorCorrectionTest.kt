@@ -140,7 +140,10 @@ class OffStateColorCorrectionTest {
             engine.setSelected(setOf("selected"))
             engine.setPolicy(policy)
             engine.setEnabled(true)
-            engine.onForeground("selected", true)
+            engine.onForeground(
+                if (policy == Policy.ONLY_SELECTED) "selected" else "other",
+                true,
+            )
             assertEquals(0, access.values[SecureGrayscaleSettings.MODE])
             assertEquals(1, access.values[SecureGrayscaleSettings.ENABLED])
 

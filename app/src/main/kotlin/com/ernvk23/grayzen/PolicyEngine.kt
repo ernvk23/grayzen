@@ -18,6 +18,8 @@ internal fun grayscaleDelayMinutes(
     defaultMinutes: Int,
     packageName: String,
 ): Int? = when {
+    packageName in selectedPackages && policy == Policy.EXCEPT_SELECTED ->
+        (overrideMinutes ?: defaultMinutes).takeIf { it > 0 }
     packageName in selectedPackages -> overrideMinutes ?: defaultMinutes
     policy == Policy.EXCEPT_SELECTED -> 0
     else -> null

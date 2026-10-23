@@ -27,7 +27,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
@@ -72,7 +71,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -92,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -119,7 +118,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -485,7 +483,7 @@ private fun HomeScreen(
             FeatureCard(
                 icon = R.drawable.ic_tabler_contrast_2_filled,
                 title = "Grayscale Control",
-                description = "Pick apps and set their grayscale delay.",
+                description = "Pick apps and set their grayscale timing.",
                 onClick = onGrayscale,
                 testTag = "feature-grayscale",
             )
@@ -697,6 +695,8 @@ private fun FeatureIconTile(@DrawableRes icon: Int) {
     }
 }
 
+private val GrayzenControlShape = RoundedCornerShape(10.dp)
+
 @Composable
 private fun GrayzenButton(
     onClick: () -> Unit,
@@ -708,7 +708,7 @@ private fun GrayzenButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = 44.dp),
         enabled = enabled,
-        shape = RoundedCornerShape(10.dp),
+        shape = GrayzenControlShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = GrayzenAmber,
             contentColor = GrayzenBackground,
@@ -806,7 +806,7 @@ private fun AppSelectionScreen(
                     if (snoozeMode) {
                         "Some apps dislike accessibility. Grayzen pauses its own permission for selected apps; use Open safely if detection fails."
                     } else if (manager.policy == Policy.EXCEPT_SELECTED) {
-                        "Unchecked apps turn grayscale immediately; checked apps follow their delay."
+                        "Unchecked apps turn grayscale immediately; checked apps stay in color until their allowance runs out."
                     } else {
                         "Only checked apps turn grayscale, after their delay."
                     },
@@ -824,6 +824,7 @@ private fun AppSelectionScreen(
                 DefaultTimerRow(
                     minutes = manager.defaultGrayAfterMinutes,
                     enabled = !state.mutating,
+                    policy = manager.policy,
                     changed = setDefaultGrayAfterMinutes,
                     resetAll = resetAllGrayAfterMinutes,
                 )
@@ -962,28 +963,43 @@ private fun PolicyTabs(policy: Policy, enabled: Boolean, changed: (Policy) -> Un
 }
 
 @Composable
-private fun DefaultTimerRow(minutes: Int, enabled: Boolean, changed: (Int) -> Unit, resetAll: () -> Unit) {
+private fun DefaultTimerRow(
+    minutes: Int,
+    enabled: Boolean,
+    policy: Policy,
+    changed: (Int) -> Unit,
+    resetAll: () -> Unit,
+) {
+    val exceptionMode = policy == Policy.EXCEPT_SELECTED
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Grayscale delay", style = MaterialTheme.typography.titleSmall)
             Text(
-                "default for checked apps; app-specific times override",
+                if (exceptionMode) "Color allowance" else "Grayscale delay",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                if (exceptionMode) {
+                    "default time in color for checked apps; app-specific times override"
+                } else {
+                    "default for checked apps; app-specific times override"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = GrayzenMuted,
             )
         }
         TimerPicker(
-            label = timerLabel(minutes),
+            label = timerLabel(minutes, policy),
             selected = minutes,
             defaultMinutes = null,
             enabled = enabled,
             highlight = true,
+            policy = policy,
             onSelected = { value -> value?.let(changed) },
             testTag = "default-timer",
-            description = "Global grayscale delay",
+            description = if (exceptionMode) "Global color allowance" else "Global grayscale delay",
             onResetAll = resetAll,
         )
     }
@@ -996,6 +1012,7 @@ private fun TimerPicker(
     defaultMinutes: Int?,
     enabled: Boolean,
     highlight: Boolean,
+    policy: Policy,
     onSelected: (Int?) -> Unit,
     testTag: String,
     description: String,
@@ -1034,6 +1051,7 @@ private fun TimerPicker(
             minutes = selected,
             defaultMinutes = defaultMinutes,
             enabled = enabled,
+            policy = policy,
             onDismiss = { open = false },
             onSelected = { minutes ->
                 open = false
@@ -1049,7 +1067,6 @@ private fun TimerPicker(
     }
 }
 
-private val TimerControlShape = RoundedCornerShape(16.dp)
 private val PresetChipSpacing = 4.dp
 
 @Composable
@@ -1057,6 +1074,7 @@ private fun TimerDialog(
     minutes: Int,
     defaultMinutes: Int?,
     enabled: Boolean,
+    policy: Policy,
     onDismiss: () -> Unit,
     onSelected: (Int?) -> Unit,
     onResetAll: (() -> Unit)?,
@@ -1068,7 +1086,9 @@ private fun TimerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = GrayzenSurfaceRaised,
-        title = { Text("Grayscale delay") },
+        title = {
+            Text(if (policy == Policy.EXCEPT_SELECTED) "Color allowance" else "Grayscale delay")
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 FlowRow(
@@ -1083,8 +1103,8 @@ private fun TimerDialog(
                                 remainingMinutes = value % 60
                             },
                             enabled = enabled,
-                            shape = TimerControlShape,
-                            label = { Text(timerLabel(value)) },
+                            shape = GrayzenControlShape,
+                            label = { Text(timerLabel(value, policy)) },
                         )
                     }
                 }
@@ -1107,27 +1127,31 @@ private fun TimerDialog(
                 HorizontalDivider(color = GrayzenBorder.copy(alpha = 0.55f))
                 Spacer(Modifier.height(20.dp))
                 if (onResetAll != null) {
-                    OutlinedButton(
-                        onClick = onResetAll,
-                        enabled = enabled,
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = TimerControlShape,
-                        border = BorderStroke(1.dp, GrayzenBorder),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Reset all to Immediate")
+                        TextButton(
+                            onClick = onResetAll,
+                            enabled = enabled,
+                            shape = GrayzenControlShape,
+                            colors = ButtonDefaults.textButtonColors(contentColor = GrayzenAmberSoft),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text("Reset")
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Clears all app time overrides.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GrayzenMuted,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Clears all app time overrides.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = GrayzenMuted,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                    )
                 }
                 if (defaultMinutes != null) {
                     TextButton(onClick = { onSelected(null) }, enabled = enabled) {
-                        Text("Use global (${timerLabel(defaultMinutes)})")
+                        Text("Use global (${timerLabel(defaultMinutes, policy)})")
                     }
                 }
             }
@@ -1151,8 +1175,9 @@ private fun DurationWheel(
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(4.dp))
         AndroidView(
-            modifier = Modifier.fillMaxWidth().height(160.dp),
+            modifier = Modifier.fillMaxWidth().height(160.dp).clipToBounds(),
             factory = { context ->
                 NumberPicker(ContextThemeWrapper(context, R.style.Theme_Grayzen)).apply {
                     minValue = 0
@@ -1172,7 +1197,11 @@ private fun DurationWheel(
     }
 }
 
-private fun timerLabel(minutes: Int) = if (minutes == 0) "Immediate" else "$minutes min"
+private fun timerLabel(minutes: Int, policy: Policy): String = when {
+    minutes > 0 -> "$minutes min"
+    policy == Policy.EXCEPT_SELECTED -> "Always color"
+    else -> "Immediate"
+}
 private fun timerChipLabel(minutes: Int) = "${minutes}m"
 
 @Composable
@@ -1282,18 +1311,27 @@ private fun AppRow(
             Text(detail, style = MaterialTheme.typography.bodySmall, color = GrayzenMuted)
         }
         if (timerVisible) {
+            val exceptionMode = manager.policy == Policy.EXCEPT_SELECTED
             TimerPicker(
                 label = if (timerMinutes == 0) "" else timerChipLabel(timerMinutes),
                 selected = timerMinutes,
                 defaultMinutes = defaultTimerMinutes,
                 enabled = !busy,
                 highlight = timerOverridden && timerMinutes > 0,
+                policy = manager.policy,
                 onSelected = setTimer,
                 testTag = "app-timer:${app.packageName}",
-                description = "Grayscale delay for ${app.label}",
+                description = if (exceptionMode) {
+                    "Color allowance for ${app.label}"
+                } else {
+                    "Grayscale delay for ${app.label}"
+                },
                 icon = if (timerMinutes == 0) R.drawable.ic_grayzen_clock else null,
-                semanticsLabel = "Grayscale delay for ${app.label}: " +
-                    if (timerMinutes == 0) "Immediate" else timerChipLabel(timerMinutes),
+                semanticsLabel = if (exceptionMode) {
+                    "Color allowance for ${app.label}: ${timerLabel(timerMinutes, manager.policy)}"
+                } else {
+                    "Grayscale delay for ${app.label}: ${timerLabel(timerMinutes, manager.policy)}"
+                },
             )
         }
         if (snoozeMode && checked) {
@@ -1597,7 +1635,7 @@ private fun TimingDialog(
                                 burstText = burst.toString()
                                 confirmationText = confirm.toString()
                             },
-                            shape = TimerControlShape,
+                            shape = GrayzenControlShape,
                             label = { Text(label) },
                             modifier = Modifier.testTag("timing-preset-$burst-$confirm"),
                         )

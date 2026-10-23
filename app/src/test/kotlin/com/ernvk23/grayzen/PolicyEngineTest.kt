@@ -151,6 +151,65 @@ class PolicyEngineTest {
         assertFalse("manager" in timed.state.selectedPackages)
     }
 
+    @Test fun exceptSelectedCheckedAppWithoutAllowanceStaysInColor() {
+        sampler.provider = { error("Usage should not be sampled without an allowance") }
+        val timed = timedEngine(defaultMinutes = 0)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false), settings.writes)
+        assertEquals(0, sampler.calls)
+        assertNull(scheduler.action)
+
+        timed.onForeground("other", true)
+        assertEquals(listOf(false, true), settings.writes)
+
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false, true, false), settings.writes)
+        assertEquals(0, sampler.calls)
+    }
+
+    @Test fun exceptSelectedZeroOverrideOverridesPositiveGlobalAllowance() {
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.setGrayAfterMinutes(mapOf("selected" to 0))
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false), settings.writes)
+        assertEquals(0, sampler.calls)
+        assertNull(scheduler.action)
+    }
+
+    @Test fun exceptSelectedCheckedAppGreysAfterItsAllowance() {
+        accruingSample(60)
+        val timed = timedEngine(defaultMinutes = 2)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false), settings.writes)
+        assertEquals(1, sampler.calls)
+        assertEquals(30_000L, scheduler.delayMillis)
+
+        elapsedMillis += scheduler.delayMillis!!
+        wallMillis += scheduler.delayMillis!!
+        scheduler.fire()
+        assertEquals(listOf(false, true), settings.writes)
+        assertEquals(2, sampler.calls)
+    }
+
+    @Test fun resettingAllowancesInExceptSelectedKeepsCheckedAppsInColor() {
+        sampler.provider = { sample(0) }
+        val timed = timedEngine(defaultMinutes = 10)
+        start(timed, Policy.EXCEPT_SELECTED)
+        timed.onForeground("selected", true)
+        assertEquals(listOf(false), settings.writes)
+        assertNotNull(scheduler.action)
+
+        timed.setDefaultGrayAfterMinutes(0, clearOverrides = true)
+        assertNull(scheduler.action)
+        assertEquals(listOf(false), settings.writes)
+
+        timed.onForeground("other", true)
+        assertEquals(listOf(false, true), settings.writes)
+    }
+
     @Test fun configurationChangesApplyImmediately() {
         val timed = timedEngine(defaultMinutes = 10)
         start(timed)

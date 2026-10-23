@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -164,7 +165,7 @@ class ManagerScreenTest {
         compose.onNodeWithText("Set").assertDoesNotExist()
 
         compose.onNodeWithTag("default-timer").performClick()
-        compose.onNodeWithText("Reset all to Immediate").performScrollTo().performClick()
+        compose.onNodeWithText("Reset").performScrollTo().performClick()
         assertTrue(resetAll)
         compose.onNodeWithText("Set").assertDoesNotExist()
     }
@@ -298,7 +299,7 @@ class ManagerScreenTest {
         )
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("app-timer:browser").performScrollTo().performClick()
-        compose.onNodeWithText("Reset all to Immediate").assertDoesNotExist()
+        compose.onNodeWithText("Reset").assertDoesNotExist()
         incrementWheel("Hours")
         compose.onNodeWithText("Set").performClick()
         assertEquals("browser" to 1440, saved)
@@ -322,6 +323,13 @@ class ManagerScreenTest {
         compose.onNodeWithTag("app-timer:browser").assertExists()
         compose.onNodeWithTag("app:camera").performScrollTo()
         compose.onNodeWithTag("app-timer:camera").assertDoesNotExist()
+    }
+
+    @Test fun exceptSelectedLabelsAZeroAllowanceAsAlwaysColor() {
+        setContent(snapshot(selected = setOf("browser")).copy(policy = Policy.EXCEPT_SELECTED))
+        compose.onNodeWithTag("feature-grayscale").performClick()
+        compose.onNodeWithTag("default-timer")
+            .assertContentDescriptionEquals("Global color allowance: Always color")
     }
 
     @Test fun searchUsesLabelAndPackageAndSelectionIsImmediate() {
