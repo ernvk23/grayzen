@@ -1,0 +1,14 @@
+# Gradle / Android
+.gradle/
+.kotlin/
+**/build/
+local.properties
+
+# Signing
+.signing/
+*.jks
+*.keystore
+
+# Editor
+.vscode/
+*.code-workspace

@@ -1,0 +1,97 @@
+package com.ernvk23.grayzen
+
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+
+class SnoozeNotificationManager(private val context: Context) : SnoozeNotifications {
+    private val manager = context.getSystemService(NotificationManager::class.java)
+
+    init { runCatching { createChannel() } }
+
+    override fun isReady(): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return@runCatching false
+        manager.areNotificationsEnabled() &&
+            manager.getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+    }.getOrDefault(false)
+
+    override fun post(packageName: String, reenableManager: Boolean): Boolean {
+        if (!isReady()) return false
+        val label = runCatching {
+            context.packageManager.getApplicationLabel(
+                context.packageManager.getApplicationInfo(packageName, 0)
+            ).toString()
+        }.getOrDefault(packageName)
+        val launchPending = PendingIntent.getActivity(
+            context,
+            LAUNCH_REQUEST_CODE,
+            Intent(context, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val resumePending = PendingIntent.getBroadcast(
+            context,
+            RESUME_REQUEST_CODE,
+            resumeIntent(context),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_grayzen_notification)
+            .setContentTitle("Grayzen is taking a break")
+            .setContentText("Grayzen paused accessibility for $label.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                "Grayzen paused accessibility for $label. Resume it when you’re done."
+            ))
+            .setContentIntent(launchPending)
+            .addAction(
+                R.drawable.ic_tabler_check_filled,
+                recoveryActionLabel(reenableManager),
+                resumePending,
+            )
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+        return runCatching {
+            manager.notify(NOTIFICATION_ID, notification)
+            true
+        }.getOrDefault(false)
+    }
+
+    override fun cancel() = manager.cancel(NOTIFICATION_ID)
+
+    private fun createChannel() {
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Grayzen recovery", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Alerts when Grayzen pauses accessibility."
+                setShowBadge(false)
+            }
+        )
+    }
+
+    companion object {
+        // Channel importance cannot be raised after creation; a new ID migrates old installs.
+        const val CHANNEL_ID = "snooze_recovery_active"
+        const val NOTIFICATION_ID = 120
+        const val ACTION_RESUME = "com.ernvk23.grayzen.action.RESUME_SNOOZE"
+        internal const val LAUNCH_REQUEST_CODE = 42
+        internal const val RESUME_REQUEST_CODE = 43
+
+        internal fun resumeIntent(context: Context): Intent =
+            Intent(context, SnoozeRecoveryReceiver::class.java).setAction(ACTION_RESUME)
+
+        internal fun recoveryActionLabel(reenableManager: Boolean): String =
+            if (reenableManager) "Grant & Re-enable" else "Grant Permission"
+    }
+}

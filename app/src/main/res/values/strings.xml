@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Grayzen</string>
+    <string name="accessibility_service_label">Grayzen</string>
+    <string name="accessibility_service_description">Reads the focused app name to apply grayscale. Never reads screen content, performs gestures, or sends data.</string>
+</resources>

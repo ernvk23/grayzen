@@ -1,0 +1,450 @@
+package com.ernvk23.grayzen
+
+import android.os.SystemClock
+import java.time.ZoneId
+
+enum class Policy { ONLY_SELECTED, EXCEPT_SELECTED }
+
+internal fun isGrayscaleTarget(
+    policy: Policy,
+    selectedPackages: Set<String>,
+    packageName: String,
+): Boolean = when (policy) {
+    Policy.ONLY_SELECTED -> packageName in selectedPackages
+    Policy.EXCEPT_SELECTED -> packageName !in selectedPackages
+}
+
+private const val PERMISSION_ERROR = "Missing secure-settings permission. Run the ADB setup."
+internal const val SERVICE_ERROR = "Enable Grayzen in Accessibility settings."
+private const val USAGE_UNAVAILABLE_ERROR = "Usage history unavailable. Check Usage Access."
+internal const val USAGE_ACCESS_ERROR = "Timed grayscale needs Usage Access. Open Setup."
+
+data class ManagerState(
+    val managerEnabled: Boolean = false,
+    val policy: Policy = Policy.ONLY_SELECTED,
+    val selectedPackages: Set<String> = emptySet(),
+    val lastRecognisedPackage: String? = null,
+    val lastAppliedGrayscale: Boolean? = null,
+    val error: String? = null,
+    val snoozePackages: Set<String> = emptySet(),
+    val snoozedForPackage: String? = null,
+    val ownsColorCorrection: Boolean = false,
+    val defaultGrayAfterMinutes: Int = DEFAULT_GRAY_AFTER_MINUTES,
+    val grayAfterMinutes: Map<String, Int> = emptyMap(),
+    val usageError: String? = null,
+    val settleDelayMs: Int = DEFAULT_BURST_MS,
+    val confirmationMs: Int = DEFAULT_CONFIRMATION_MS,
+)
+
+internal fun ManagerState.isAutoSnoozeCandidate(packageName: String): Boolean =
+    snoozedForPackage == null && packageName in snoozePackages
+
+interface StateStore {
+    fun read(): ManagerState
+    fun write(state: ManagerState)
+}
+
+interface GrayscaleSettings {
+    fun hasPermission(): Boolean
+    /** True when the provider already holds the values this destination would apply. */
+    fun isApplied(enabled: Boolean): Boolean
+    /** Return false when the provider refuses a write; may throw SecurityException. */
+    fun setGrayscale(enabled: Boolean): Boolean
+    /** Stop management and restore saved correction, preserving a newer manual choice. */
+    fun release(): Boolean
+}
+
+/** All entry points run on Android's main thread, including secure-setting writes. */
+class PolicyEngine(
+    private val ownPackage: String,
+    private val store: StateStore,
+    private val settings: GrayscaleSettings,
+    private val serviceEnabled: () -> Boolean,
+    private val changed: () -> Unit = {},
+    private val scheduler: UsageCheckScheduler = NoOpUsageCheckScheduler,
+    private val usageSampler: UsageSampler = UnavailableUsageSampler,
+    private val usageAccess: () -> Boolean = { true },
+    private val nowWallMillis: () -> Long = { System.currentTimeMillis() },
+    private val nowElapsedMillis: () -> Long = { SystemClock.elapsedRealtime() },
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+) {
+    var state = store.read()
+        private set
+    private var foregroundTarget: String? = null
+    private var screenOn = true
+    private var locked = false
+    private var evaluationGeneration = 0L
+    private var evaluationPending = false
+    private var awaitingConfirmation = false
+    private var reevaluateOnConfirmation = false
+
+    private fun save(next: ManagerState) {
+        if (next == state) return
+        state = next
+        store.write(next)
+        changed()
+    }
+
+    /** True when a reported prerequisite error was just cleared. */
+    fun checkPrerequisites(): Boolean {
+        if (!settings.hasPermission()) {
+            cancelEvaluation()
+            save(state.copy(lastAppliedGrayscale = null, error = PERMISSION_ERROR))
+            return false
+        }
+        if (!serviceEnabled() && state.managerEnabled && state.snoozedForPackage == null) {
+            cancelEvaluation()
+            releaseGrayscale()
+            if (state.error == null) save(state.copy(error = SERVICE_ERROR))
+            return false
+        }
+        if (state.error == PERMISSION_ERROR || state.error == SERVICE_ERROR) {
+            save(state.copy(error = null))
+            return true
+        }
+        return false
+    }
+
+    fun refreshPrerequisites() {
+        checkPrerequisites()
+        evaluate()
+    }
+
+    fun setEnabled(enabled: Boolean) {
+        if (!enabled) {
+            cancelEvaluation()
+            save(state.copy(managerEnabled = false, snoozedForPackage = null))
+            releaseGrayscale()
+            return
+        }
+        checkPrerequisites()
+        if (!settings.hasPermission() || !serviceEnabled()) return
+        save(state.copy(managerEnabled = true, error = null,
+            lastAppliedGrayscale = if (state.managerEnabled) state.lastAppliedGrayscale else null))
+        evaluate()
+    }
+
+    fun setPolicy(policy: Policy) {
+        val overrides = state.grayAfterMinutes.filterKeys {
+            isGrayscaleTarget(policy, state.selectedPackages, it)
+        }
+        save(state.copy(policy = policy, grayAfterMinutes = overrides))
+        checkPrerequisites()
+        evaluate()
+    }
+
+    fun setSelected(packages: Set<String>) {
+        val selected = packages - ownPackage
+        val overrides = state.grayAfterMinutes.filterKeys {
+            isGrayscaleTarget(state.policy, selected, it)
+        }
+        save(state.copy(selectedPackages = selected, grayAfterMinutes = overrides))
+        checkPrerequisites()
+        evaluate()
+    }
+
+    fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) {
+        save(state.copy(
+            settleDelayMs = sanitizeForegroundTimingMs(settleDelayMs),
+            confirmationMs = sanitizeForegroundTimingMs(confirmationMs),
+        ))
+    }
+
+    fun setDefaultGrayAfterMinutes(minutes: Int, clearOverrides: Boolean = false) {
+        save(state.copy(
+            defaultGrayAfterMinutes = minutes.coerceIn(0, MAX_GRAY_AFTER_MINUTES),
+            grayAfterMinutes = if (clearOverrides) emptyMap() else state.grayAfterMinutes,
+        ))
+        evaluate()
+    }
+
+    fun setGrayAfterMinutes(packages: Map<String, Int>) {
+        val sanitized = packages
+            .filterKeys {
+                it.isNotBlank() && isGrayscaleTarget(state.policy, state.selectedPackages, it)
+            }
+            .mapValues { (_, minutes) -> minutes.coerceIn(0, MAX_GRAY_AFTER_MINUTES) }
+        save(state.copy(grayAfterMinutes = sanitized))
+        evaluate()
+    }
+
+    fun setSnoozePackages(packages: Set<String>) {
+        save(state.copy(snoozePackages = packages - ownPackage))
+    }
+
+    fun prepareSnooze(packageName: String): Boolean {
+        if (state.snoozedForPackage != null || packageName !in state.snoozePackages) {
+            return false
+        }
+        cancelEvaluation()
+        save(state.copy(snoozedForPackage = packageName, error = null))
+        return true
+    }
+
+    /** Release Grayzen's correction without changing the user's master-enabled preference. */
+    fun restoreColorForSnooze(): Boolean {
+        if (!state.ownsColorCorrection) return true
+        return try {
+            if (!settings.hasPermission()) throw SecurityException("Permission missing")
+            if (!settings.release()) {
+                save(state.copy(lastAppliedGrayscale = null,
+                    error = "Color correction could not be restored before snooze. Check Android settings."))
+                false
+            } else {
+                save(state.copy(lastAppliedGrayscale = null, ownsColorCorrection = false, error = null))
+                true
+            }
+        } catch (_: SecurityException) {
+            save(state.copy(lastAppliedGrayscale = null, error = PERMISSION_ERROR))
+            false
+        } catch (_: RuntimeException) {
+            save(state.copy(lastAppliedGrayscale = null,
+                error = "Color correction could not be restored before snooze. Check Android settings."))
+            false
+        }
+    }
+
+    fun abortSnooze(message: String) {
+        save(state.copy(snoozedForPackage = null, error = message))
+        evaluate()
+        if (state.error == null) reportError(message)
+    }
+
+    fun reportError(message: String) = save(state.copy(error = message))
+
+    fun completeResume() {
+        save(state.copy(snoozedForPackage = null, lastRecognisedPackage = null,
+            lastAppliedGrayscale = null, error = null))
+    }
+
+    fun onConnected() {
+        cancelEvaluation()
+        awaitingConfirmation = false
+        screenOn = true
+        locked = false
+        // Persisted foreground and applied state cannot be trusted after reconnect/restart.
+        foregroundTarget = null
+        save(state.copy(lastRecognisedPackage = null, lastAppliedGrayscale = null))
+        checkPrerequisites()
+        if (!state.managerEnabled && settings.hasPermission()) releaseGrayscale()
+    }
+
+    fun onForeground(packageName: String, isLaunchable: Boolean) {
+        // Check before deduplication so revocation and recovery are seen on repeated events.
+        val recovered = checkPrerequisites()
+        if (packageName != ownPackage && !isLaunchable) return
+        val same = packageName == foregroundTarget
+        val reevaluate = recovered || reevaluateOnConfirmation
+        awaitingConfirmation = false
+        if (same && !reevaluate) return
+        foregroundTarget = packageName
+        if (packageName != state.lastRecognisedPackage) {
+            save(state.copy(lastRecognisedPackage = packageName))
+        }
+        evaluate()
+    }
+
+    /** Drop pending work until the transition is confirmed. */
+    fun onTransitionStarted() {
+        awaitingConfirmation = true
+        if (!evaluationPending) return
+        cancelEvaluation()
+        reevaluateOnConfirmation = true
+    }
+
+    /** Require a fresh evaluation when the current destination is confirmed again. */
+    fun onForegroundUnconfirmed() {
+        if (awaitingConfirmation) reevaluateOnConfirmation = true
+    }
+
+    /** Keep current color, drop the deadline, and resample when the app is confirmed again. */
+    fun onForegroundUncertain() {
+        cancelEvaluation()
+        awaitingConfirmation = false
+        foregroundTarget = null
+    }
+
+    fun onDisconnected() {
+        cancelEvaluation()
+        awaitingConfirmation = false
+        foregroundTarget = null
+        locked = false
+        save(state.copy(lastRecognisedPackage = null))
+        if (state.snoozedForPackage == null) {
+            releaseGrayscale()
+            if (state.managerEnabled && state.error == null) save(state.copy(error = SERVICE_ERROR))
+        }
+    }
+
+    /** Locking shows the launcher's policy state and forgets the foreground app. */
+    fun onScreenOff(homePackage: String?) {
+        screenOn = false
+        locked = true
+        cancelEvaluation()
+        awaitingConfirmation = false
+        foregroundTarget = homePackage
+        if (!state.managerEnabled || state.snoozedForPackage != null || homePackage == null) {
+            releaseGrayscale()
+            return
+        }
+        evaluate()
+    }
+
+    /** Unlock starts from a clean slate; the service reclassifies the current windows. */
+    fun onUserPresent() {
+        screenOn = true
+        locked = false
+        awaitingConfirmation = false
+        foregroundTarget = null
+    }
+
+    /** Clock, timezone, or date changes replace the deadline with a fresh sample. */
+    fun onTimeChanged() {
+        if (state.managerEnabled && state.snoozedForPackage == null) evaluate()
+    }
+
+    private fun evaluate() {
+        if (awaitingConfirmation) {
+            reevaluateOnConfirmation = true
+            return
+        }
+        cancelEvaluation()
+        if (!state.managerEnabled || state.snoozedForPackage != null || (!screenOn && !locked)) return
+        if (state.error == PERMISSION_ERROR || state.error == SERVICE_ERROR) return
+        if (usageAccess() && state.usageError == USAGE_ACCESS_ERROR) {
+            setUsageError(null)
+        }
+        val target = foregroundTarget ?: return
+        val grayscale = target != ownPackage &&
+            isGrayscaleTarget(state.policy, state.selectedPackages, target)
+        if (!grayscale) {
+            applyGrayscale(false)
+            return
+        }
+        val minutes = state.grayAfterMinutes[target] ?: state.defaultGrayAfterMinutes
+        val allowanceSeconds = minutes.coerceAtLeast(0) * 60L
+        if (allowanceSeconds <= 0L) {
+            applyGrayscale(true)
+            return
+        }
+        if (!usageAccess()) {
+            setUsageError(USAGE_ACCESS_ERROR)
+            applyGrayscale(false)
+            return
+        }
+        val generation = evaluationGeneration
+        evaluationPending = true
+        usageSampler.sample(target) { sample ->
+            onSample(generation, target, allowanceSeconds, sample)
+        }
+    }
+
+    private fun onSample(
+        generation: Long,
+        packageName: String,
+        allowanceSeconds: Long,
+        sample: UsageSample,
+    ) {
+        if (generation != evaluationGeneration || !isActive(packageName)) return
+        evaluationPending = false
+        when (sample) {
+            UsageSample.Unavailable -> {
+                setUsageError(USAGE_UNAVAILABLE_ERROR)
+                applyGrayscale(false, clearError = false)
+            }
+            is UsageSample.Available -> {
+                if (sample.dayStartMillis != startOfTodayMillis(nowWallMillis(), zone())) {
+                    // The local day changed while the query was in flight; sample again.
+                    evaluate()
+                    return
+                }
+                setUsageError(null)
+                val remainingSeconds = allowanceSeconds - sample.usedSeconds
+                val deadlineElapsedMillis = sample.sampledAtElapsedMillis +
+                    (remainingSeconds - USAGE_EXHAUSTED_MARGIN_SECONDS) * 1_000L
+                val delayMillis = deadlineElapsedMillis - nowElapsedMillis()
+                if (remainingSeconds <= USAGE_EXHAUSTED_MARGIN_SECONDS || delayMillis <= 0L) {
+                    applyGrayscale(true, clearError = false)
+                    return
+                }
+                applyGrayscale(false, clearError = false)
+                if (locked) return
+                if (generation != evaluationGeneration || !isActive(packageName)) return
+                evaluationPending = true
+                scheduler.schedule(delayMillis) {
+                    onDeadline(generation, packageName)
+                }
+            }
+        }
+    }
+
+    private fun onDeadline(generation: Long, packageName: String) {
+        if (generation != evaluationGeneration || !isActive(packageName)) return
+        evaluate()
+    }
+
+    private fun isActive(packageName: String): Boolean =
+        state.managerEnabled && state.snoozedForPackage == null && (screenOn || locked) &&
+            foregroundTarget == packageName
+
+    private fun setUsageError(message: String?) {
+        if (state.usageError == message) return
+        save(state.copy(usageError = message))
+    }
+
+    private fun cancelEvaluation() {
+        evaluationGeneration++
+        scheduler.cancel()
+        evaluationPending = false
+        reevaluateOnConfirmation = false
+    }
+
+    private fun applyGrayscale(enabled: Boolean, clearError: Boolean = true) {
+        try {
+            if (state.lastAppliedGrayscale == enabled && settings.isApplied(enabled)) return
+            if (!settings.hasPermission()) throw SecurityException("Permission missing")
+            // Persist ownership before writing so restarts can clean up after partial failures.
+            save(state.copy(ownsColorCorrection = true))
+            if (!settings.setGrayscale(enabled)) {
+                failChange("Android refused the change. Check setup and try again.")
+                return
+            }
+            save(state.copy(lastAppliedGrayscale = enabled, error = if (clearError) null else state.error))
+        } catch (_: SecurityException) {
+            failChange(PERMISSION_ERROR)
+        } catch (_: RuntimeException) {
+            failChange("Could not change Android Color correction. Check setup.")
+        }
+    }
+
+    private fun releaseGrayscale() {
+        if (!state.ownsColorCorrection) return
+        try {
+            if (!settings.hasPermission()) throw SecurityException("Permission missing")
+            if (!settings.release()) {
+                failChange("Android refused the restore. Check Color correction settings.",
+                    cleanup = false)
+                return
+            }
+            save(state.copy(lastAppliedGrayscale = null, ownsColorCorrection = false, error = null))
+        } catch (_: SecurityException) {
+            failChange(PERMISSION_ERROR, cleanup = false)
+        } catch (_: RuntimeException) {
+            failChange("Couldn’t restore Color correction. Check Android settings.",
+                cleanup = false)
+        }
+    }
+
+    private fun failChange(message: String, cleanup: Boolean = true) {
+        cancelEvaluation()
+        var error = message
+        var ownsColorCorrection = state.ownsColorCorrection
+        if (cleanup && ownsColorCorrection && settings.hasPermission()) {
+            val restored = try { settings.release() } catch (_: RuntimeException) { false }
+            if (restored) ownsColorCorrection = false
+            if (!restored) error += " Couldn’t restore Color correction; check Android settings."
+        }
+        save(state.copy(lastAppliedGrayscale = null,
+            ownsColorCorrection = ownsColorCorrection, error = error))
+    }
+}

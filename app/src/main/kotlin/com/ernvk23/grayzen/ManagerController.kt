@@ -1,0 +1,354 @@
+package com.ernvk23.grayzen
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.role.RoleManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.time.ZoneId
+
+data class ManagerSnapshot(
+    val applicationId: String,
+    val permissionGranted: Boolean,
+    val serviceEnabled: Boolean,
+    val managerEnabled: Boolean,
+    val policy: Policy,
+    val selectedPackages: Set<String>,
+    val lastRecognisedPackage: String?,
+    val lastAppliedGrayscale: Boolean?,
+    val error: String?,
+    val snoozePackages: Set<String> = emptySet(),
+    val snoozedForPackage: String? = null,
+    val status: ManagerStatus = ManagerStatus.DISABLED,
+    val notificationReady: Boolean = false,
+    val defaultGrayAfterMinutes: Int = DEFAULT_GRAY_AFTER_MINUTES,
+    val grayAfterMinutes: Map<String, Int> = emptyMap(),
+    val usageAccessGranted: Boolean = false,
+    val usageError: String? = null,
+    val settleDelayMs: Int = DEFAULT_BURST_MS,
+    val confirmationMs: Int = DEFAULT_CONFIRMATION_MS,
+) {
+    val ready: Boolean get() = permissionGranted && serviceEnabled
+    val adbCommand: String
+        get() = "adb shell pm grant $applicationId android.permission.WRITE_SECURE_SETTINGS"
+}
+
+interface ManagerStateSource {
+    val snapshots: StateFlow<ManagerSnapshot>
+    fun setEnabled(enabled: Boolean)
+    fun setPolicy(policy: Policy)
+    fun setSelectedPackages(packages: Set<String>)
+    fun setSnoozePackages(packages: Set<String>) = Unit
+    fun setDefaultGrayAfterMinutes(minutes: Int, clearOverrides: Boolean = false) = Unit
+    fun setGrayAfterMinutes(packages: Map<String, Int>) = Unit
+    fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) = Unit
+    fun openSafely(packageName: String) = Unit
+    fun resumeFromSnooze() = Unit
+    fun refreshPrerequisites()
+}
+
+class ManagerController private constructor(private val context: Context) : ManagerStateSource {
+    private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val usageHistory = AndroidUsageHistory(context)
+    private var usageAccessGranted = usageHistory.isGranted()
+    private val _snapshots = MutableStateFlow(emptySnapshot(context.packageName))
+    override val snapshots: StateFlow<ManagerSnapshot> = _snapshots.asStateFlow()
+
+    private val secureAccess = object : SecureSettingsAccess, AccessibilitySettingsAccess {
+        override fun hasPermission() = context.checkSelfPermission(
+            Manifest.permission.WRITE_SECURE_SETTINGS
+        ) == PackageManager.PERMISSION_GRANTED
+        override fun readInt(key: String): Int? =
+            Settings.Secure.getString(context.contentResolver, key)?.toIntOrNull()
+        override fun writeInt(key: String, value: Int) =
+            Settings.Secure.putInt(context.contentResolver, key, value)
+        override fun clear(key: String) =
+            Settings.Secure.putString(context.contentResolver, key, null)
+        override fun readString(key: String): String? =
+            Settings.Secure.getString(context.contentResolver, key)
+        override fun writeString(key: String, value: String) =
+            Settings.Secure.putString(context.contentResolver, key, value)
+    }
+    private val settings = SecureGrayscaleSettings(secureAccess, PreferencesCorrectionSessionStore(
+        context.getSharedPreferences("color_correction_recovery", Context.MODE_PRIVATE)
+    ))
+    private val accessibilitySettings = SecureAccessibilitySettings(
+        ComponentName(context, ForegroundAccessibilityService::class.java), secureAccess
+    )
+    private val notifications = SnoozeNotificationManager(context)
+    private val handler = Handler(Looper.getMainLooper())
+    private var transitionStatus: ManagerStatus? = null
+
+    val engine = PolicyEngine(context.packageName, object : StateStore {
+        override fun read(): ManagerState {
+            val policy = runCatching {
+                Policy.valueOf(preferences.getString("policy", null) ?: "ONLY_SELECTED")
+            }.getOrDefault(Policy.ONLY_SELECTED)
+            val selectedPackages = preferences.getStringSet("selectedPackages", emptySet())!!.toSet()
+            return ManagerState(
+                managerEnabled = preferences.getBoolean("managerEnabled", false),
+                policy = policy,
+                selectedPackages = selectedPackages,
+                snoozePackages = preferences.getStringSet("snoozePackages", emptySet())!!.toSet(),
+                snoozedForPackage = preferences.getString("snoozedForPackage", null),
+                lastRecognisedPackage = preferences.getString("lastRecognisedPackage", null),
+                lastAppliedGrayscale = if (preferences.contains("lastAppliedGrayscale"))
+                    preferences.getBoolean("lastAppliedGrayscale", false) else null,
+                error = preferences.getString("error", null),
+                // Older builds only recorded the applied value; grayscale still implies ownership.
+                ownsColorCorrection = preferences.getBoolean("ownsColorCorrection",
+                    preferences.getBoolean("lastAppliedGrayscale", false)),
+                defaultGrayAfterMinutes = preferences.getInt(
+                    "defaultGrayAfterMinutes", DEFAULT_GRAY_AFTER_MINUTES
+                ),
+                grayAfterMinutes = parseGrayAfter(
+                    preferences.getStringSet("grayAfterMinutes", emptySet())!!.toSet()
+                ).filterKeys { isGrayscaleTarget(policy, selectedPackages, it) },
+                settleDelayMs = sanitizeForegroundTimingMs(
+                    preferences.getInt("settleDelayMs", DEFAULT_BURST_MS)
+                ),
+                confirmationMs = sanitizeForegroundTimingMs(
+                    preferences.getInt("confirmationMs", DEFAULT_CONFIRMATION_MS)
+                ),
+            )
+        }
+
+        override fun write(state: ManagerState) {
+            val ownershipChanged = state.ownsColorCorrection !=
+                preferences.getBoolean("ownsColorCorrection", false)
+            preferences.edit().apply {
+                putBoolean("managerEnabled", state.managerEnabled)
+                putBoolean("ownsColorCorrection", state.ownsColorCorrection)
+                putString("policy", state.policy.name)
+                putStringSet("selectedPackages", state.selectedPackages.toSet())
+                putStringSet("snoozePackages", state.snoozePackages.toSet())
+                putString("snoozedForPackage", state.snoozedForPackage)
+                putString("lastRecognisedPackage", state.lastRecognisedPackage)
+                putString("error", state.error)
+                putInt("defaultGrayAfterMinutes", state.defaultGrayAfterMinutes)
+                putInt("settleDelayMs", state.settleDelayMs)
+                putInt("confirmationMs", state.confirmationMs)
+                putStringSet("grayAfterMinutes", state.grayAfterMinutes.map { (packageName, minutes) ->
+                    "$packageName=$minutes"
+                }.toSet())
+                state.lastAppliedGrayscale?.let { putBoolean("lastAppliedGrayscale", it) }
+                    ?: remove("lastAppliedGrayscale")
+            }.let { editor ->
+                // Ownership must survive a process restart around secure-setting writes.
+                if (ownershipChanged) editor.commit() else editor.apply()
+            }
+        }
+    }, settings, ::isServiceEnabled, ::publishState,
+        scheduler = HandlerUsageCheckScheduler(handler),
+        usageSampler = usageHistory,
+        usageAccess = { usageAccessGranted },
+        nowWallMillis = { System.currentTimeMillis() },
+        zone = { ZoneId.systemDefault() },
+    )
+
+    private val snooze = SnoozeCoordinator(
+        engine = engine,
+        notifications = notifications,
+        accessibility = accessibilitySettings,
+        launcher = object : SnoozeAppLauncher {
+            override fun launch(packageName: String): Boolean {
+                val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            }
+        },
+        phaseChanged = {
+            transitionStatus = if (it == ManagerStatus.SNOOZING || it == ManagerStatus.RESUMING) it else null
+            publishState()
+        },
+    )
+
+    init { publishState() }
+
+    override fun setEnabled(enabled: Boolean) = onMain {
+        if (!enabled && engine.state.snoozedForPackage != null) snooze.cancelByTurningOff()
+        else engine.setEnabled(enabled)
+        publishState()
+    }
+
+    override fun setPolicy(policy: Policy) = onMain {
+        engine.setPolicy(policy)
+        publishState()
+    }
+
+    override fun setSelectedPackages(packages: Set<String>) = onMain {
+        engine.setSelected(packages)
+        publishState()
+    }
+
+    override fun setSnoozePackages(packages: Set<String>) = onMain {
+        val filtered = packages - activeHomePackages() - context.packageName
+        if (filtered.isNotEmpty() && engine.state.snoozePackages.isEmpty() && !notifications.isReady()) {
+            engine.reportError(SnoozeCoordinator.NOTIFICATION_ERROR)
+        } else engine.setSnoozePackages(filtered)
+        publishState()
+    }
+
+    override fun setDefaultGrayAfterMinutes(minutes: Int, clearOverrides: Boolean) = onMain {
+        engine.setDefaultGrayAfterMinutes(minutes, clearOverrides)
+        publishState()
+    }
+
+    override fun setGrayAfterMinutes(packages: Map<String, Int>) = onMain {
+        engine.setGrayAfterMinutes(packages - context.packageName)
+        publishState()
+    }
+
+    override fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) = onMain {
+        engine.setForegroundTiming(settleDelayMs, confirmationMs)
+        publishState()
+    }
+
+    override fun openSafely(packageName: String) = onMain {
+        engine.checkPrerequisites()
+        snooze.openSafely(packageName)
+        publishState()
+    }
+
+    override fun resumeFromSnooze() = onMain {
+        if (transitionStatus == ManagerStatus.RESUMING) return@onMain
+        if (snooze.resume()) {
+            handler.removeCallbacksAndMessages(RESUME_TOKEN)
+            handler.postAtTime({
+                snooze.resumeTimedOut()
+                publishState()
+            }, RESUME_TOKEN, android.os.SystemClock.uptimeMillis() + RESUME_TIMEOUT_MS)
+        }
+        publishState()
+    }
+
+    fun automaticSnooze(packageName: String, disableSelf: () -> Unit): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        // Reject non-candidates before any Home, permission, or notification lookup.
+        if (!engine.state.isAutoSnoozeCandidate(packageName)) return false
+        if (packageName == context.packageName || packageName in activeHomePackages()) return false
+        return snooze.automatic(packageName, disableSelf).also { publishState() }
+    }
+
+    fun onServiceConnected() {
+        handler.removeCallbacksAndMessages(RESUME_TOKEN)
+        snooze.onServiceConnected()
+        refreshUsageAccess()
+        engine.onConnected()
+        publishState()
+    }
+
+    fun onServiceDisconnected() {
+        engine.onDisconnected()
+        publishState()
+    }
+
+    fun repostSnoozeRecovery() = onMain {
+        snooze.repostRecovery()
+        publishState()
+    }
+
+    override fun refreshPrerequisites() = onMain {
+        refreshUsageAccess()
+        engine.refreshPrerequisites()
+        publishState()
+    }
+
+    fun refreshUsageAccess() {
+        usageAccessGranted = usageHistory.isGranted()
+    }
+    fun publishState() {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Controller state must be published on main" }
+        val state = engine.state
+        val snoozePackages = state.snoozePackages - activeHomePackages() - context.packageName
+        val status = transitionStatus ?: when {
+            state.snoozedForPackage != null -> ManagerStatus.SNOOZED
+            state.managerEnabled -> ManagerStatus.ACTIVE
+            else -> ManagerStatus.DISABLED
+        }
+        _snapshots.value = ManagerSnapshot(
+            applicationId = context.packageName,
+            permissionGranted = settings.hasPermission(),
+            serviceEnabled = isServiceEnabled(),
+            managerEnabled = state.managerEnabled,
+            policy = state.policy,
+            selectedPackages = state.selectedPackages,
+            snoozePackages = snoozePackages,
+            snoozedForPackage = state.snoozedForPackage,
+            status = status,
+            notificationReady = notifications.isReady(),
+            lastRecognisedPackage = state.lastRecognisedPackage,
+            lastAppliedGrayscale = state.lastAppliedGrayscale,
+            error = state.error,
+            defaultGrayAfterMinutes = state.defaultGrayAfterMinutes,
+            grayAfterMinutes = state.grayAfterMinutes - context.packageName,
+            usageAccessGranted = usageAccessGranted,
+            usageError = state.usageError,
+            settleDelayMs = state.settleDelayMs,
+            confirmationMs = state.confirmationMs,
+        )
+    }
+
+    fun isServiceEnabled(): Boolean {
+        val manager = context.getSystemService(AccessibilityManager::class.java)
+        val expected = ComponentName(context, ForegroundAccessibilityService::class.java)
+        val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { info ->
+                val service = info.resolveInfo.serviceInfo
+                ComponentName(service.packageName, service.name) == expected
+            }
+        return enabled || accessibilitySettings.isOwnServiceEnabled()
+    }
+
+    fun activeHomePackages(): Set<String> {
+        if (Build.VERSION.SDK_INT >= 29) {
+            // RoleManager exposes no holders, so resolve the role's HOME intent.
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) return emptySet()
+        }
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName?.let(::setOf).orEmpty()
+    }
+
+    private inline fun onMain(block: () -> Unit) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Mutations must run on main" }
+        block()
+    }
+
+    companion object {
+        const val PREFERENCES = "grayscale_manager"
+        @SuppressLint("StaticFieldLeak") // Holds applicationContext only.
+        @Volatile private var instance: ManagerController? = null
+
+        private fun emptySnapshot(packageName: String) = ManagerSnapshot(
+            packageName, false, false, false, Policy.ONLY_SELECTED, emptySet(), null, null, null
+        )
+
+        private val RESUME_TOKEN = Any()
+        private const val RESUME_TIMEOUT_MS = 8_000L
+
+        private fun parseGrayAfter(values: Set<String>): Map<String, Int> =
+            values.mapNotNull { entry ->
+                val packageName = entry.substringBeforeLast('=', "")
+                val minutes = entry.substringAfterLast('=', "").toIntOrNull()
+                if (packageName.isBlank() || minutes == null || minutes < 0) null
+                else packageName to minutes.coerceAtMost(MAX_GRAY_AFTER_MINUTES)
+            }.toMap()
+
+        fun get(context: Context): ManagerController = instance ?: synchronized(this) {
+            instance ?: ManagerController(context.applicationContext).also { instance = it }
+        }
+    }
+}
