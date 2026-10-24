@@ -303,12 +303,12 @@ class ManagerController private constructor(private val context: Context) : Mana
     fun isServiceEnabled(): Boolean {
         val manager = context.getSystemService(AccessibilityManager::class.java)
         val expected = ComponentName(context, ForegroundAccessibilityService::class.java)
-        val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        // Only a bound service can deliver events; the secure setting can be stale.
+        return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { info ->
                 val service = info.resolveInfo.serviceInfo
                 ComponentName(service.packageName, service.name) == expected
             }
-        return enabled || accessibilitySettings.isOwnServiceEnabled()
     }
 
     fun activeHomePackages(): Set<String> {
