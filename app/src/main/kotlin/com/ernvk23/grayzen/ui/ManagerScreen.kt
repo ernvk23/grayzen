@@ -116,9 +116,15 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -148,6 +154,8 @@ import kotlin.math.sign
 import kotlin.math.sin
 
 private enum class Destination { HOME, GRAYSCALE_CONTROL, AUTO_SNOOZE_APPS, SETUP }
+
+private const val ADB_GUIDE_URL = "https://developer.android.com/tools/adb"
 
 /** A superellipse has continuous curvature; it is not a rounded-rectangle approximation. */
 object ContinuousSquircle : Shape {
@@ -1411,10 +1419,24 @@ private fun SetupScreen(
                 title = "Allow secure settings",
                 ready = manager.permissionGranted,
             ) {
-                Text(
-                    "Run this once from a computer with ADB:",
-                    color = GrayzenMuted,
-                )
+                val adbInstructions = buildAnnotatedString {
+                    append("Enable USB debugging, connect to a computer with ")
+                    withLink(
+                        LinkAnnotation.Url(
+                            url = ADB_GUIDE_URL,
+                            styles = TextLinkStyles(
+                                style = SpanStyle(
+                                    color = GrayzenAmberSoft,
+                                    textDecoration = TextDecoration.Underline,
+                                )
+                            ),
+                        )
+                    ) {
+                        append("ADB")
+                    }
+                    append(", then run this once:")
+                }
+                Text(adbInstructions, color = GrayzenMuted)
                 Spacer(Modifier.height(12.dp))
                 SelectionContainer {
                     Text(

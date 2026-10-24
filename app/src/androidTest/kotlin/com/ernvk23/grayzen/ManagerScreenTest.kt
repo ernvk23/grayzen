@@ -93,6 +93,7 @@ class ManagerScreenTest {
         compose.onNodeWithTag("setup-screen").assertExists()
         compose.onNodeWithText("Grayzen is ready.").assertDoesNotExist()
         compose.onNodeWithText("Two small steps", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Enable USB debugging", substring = true).assertExists()
         compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-usage-access"))
         compose.onNodeWithText("Needed for daily time limits", substring = true).assertExists()
         compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("information-block"))
