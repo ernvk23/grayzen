@@ -9,7 +9,8 @@ It uses Android's accessibility service only to detect which app is in front. It
 ### Prerequisites
 
 - Android 8.0 (API 26) or newer.
-- A PC with [Android platform-tools (ADB)](https://developer.android.com/tools/releases/platform-tools) and USB debugging enabled.
+- A PC with [Android platform-tools (ADB)](https://developer.android.com/tools/releases/platform-tools).
+- [USB debugging enabled](https://developer.android.com/studio/debug/dev-options) on the phone.
 
 ### Quick setup (recommended)
 
@@ -18,7 +19,7 @@ On the PC:
 ```sh
 curl -fL -o grayzen.apk https://github.com/ernvk23/grayzen/releases/latest/download/grayzen.apk &&
   adb install -r grayzen.apk &&
-  adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
+  adb shell pm grant ernvk23.github.io android.permission.WRITE_SECURE_SETTINGS
 ```
 
 Then open the app and enable the accessibility service in Settings → Accessibility.
@@ -33,8 +34,9 @@ Then open the app and enable the accessibility service in Settings → Accessibi
 3. From a PC, grant the secure setting:
 
    ```sh
-   adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
+   adb shell pm grant ernvk23.github.io android.permission.WRITE_SECURE_SETTINGS
    ```
+
 4. Open the app and complete setup. When asked, enable its accessibility service in Settings → Accessibility.
 5. Optional: allow Usage Access if you want daily time limits.
 
