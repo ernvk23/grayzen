@@ -4,9 +4,16 @@ Turns the screen gray while selected apps are open, then restores color when you
 
 It uses Android's accessibility service only to detect which app is in front. It never reads what is on screen, and it has no internet access.
 
-## Quick setup with ADB
+## Install
 
-On a PC with `adb`:
+### Prerequisites
+
+- Android 8.0 (API 26) or newer.
+- A PC with [Android platform-tools (ADB)](https://developer.android.com/tools/releases/platform-tools) and USB debugging enabled.
+
+### Quick setup (recommended)
+
+On the PC:
 
 ```sh
 curl -fL -o grayzen.apk https://github.com/ernvk23/grayzen/releases/latest/download/grayzen.apk &&
@@ -19,9 +26,7 @@ Then open the app and enable the accessibility service in Settings → Accessibi
 > [!IMPORTANT]
 > Android does not let you grant `WRITE_SECURE_SETTINGS` from Settings. The command above handles it over ADB.
 
-## Install
-
-Prefer a manual install?
+### Manual
 
 1. Download the latest `grayzen.apk` from [Releases](https://github.com/ernvk23/grayzen/releases).
 2. Install it on the phone.
@@ -32,9 +37,6 @@ Prefer a manual install?
    ```
 4. Open the app and complete setup. When asked, enable its accessibility service in Settings → Accessibility.
 5. Optional: allow Usage Access if you want daily time limits.
-
-> [!NOTE]
-> Requires Android 8.0 or newer.
 
 > [!WARNING]
 > Turn the app off before uninstalling, otherwise the screen may stay gray.
