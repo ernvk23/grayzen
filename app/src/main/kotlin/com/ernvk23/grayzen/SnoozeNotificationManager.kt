@@ -47,10 +47,10 @@ class SnoozeNotificationManager(private val context: Context) : SnoozeNotificati
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_grayzen_notification)
-            .setContentTitle("Grayzen is taking a break")
-            .setContentText("Grayzen paused accessibility for $label.")
+            .setContentTitle("Accessibility paused")
+            .setContentText("Paused accessibility for $label.")
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "Grayzen paused accessibility for $label. Resume it when you’re done."
+                "Accessibility is paused for $label. Resume it when you’re done."
             ))
             .setContentIntent(launchPending)
             .addAction(
@@ -73,8 +73,8 @@ class SnoozeNotificationManager(private val context: Context) : SnoozeNotificati
 
     private fun createChannel() {
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Grayzen recovery", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Alerts when Grayzen pauses accessibility."
+            NotificationChannel(CHANNEL_ID, "Snooze recovery", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Alerts when accessibility is paused for selected apps."
                 setShowBadge(false)
             }
         )

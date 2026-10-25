@@ -212,7 +212,7 @@ class ManagerScreenTest {
         setContent(snapshot(service = false).copy(managerEnabled = true, error = SERVICE_ERROR))
         compose.onNodeWithTag("home-warning").assertExists().assertHasNoClickAction()
         compose.onNodeWithText("Accessibility is off").assertExists()
-        compose.onNodeWithText("Enable Grayzen in Accessibility settings.").assertExists()
+        compose.onNodeWithText("Enable the service in Accessibility settings.").assertExists()
     }
 
     @Test fun accessibilityWarningIsNotRepeatedInGrayscaleControl() {
@@ -326,11 +326,11 @@ class ManagerScreenTest {
         compose.onNodeWithTag("app-timer:camera").assertDoesNotExist()
     }
 
-    @Test fun exceptSelectedLabelsAZeroAllowanceAsAlwaysColor() {
+    @Test fun exceptSelectedLabelsAZeroAllowanceAsAlways() {
         setContent(snapshot(selected = setOf("browser")).copy(policy = Policy.EXCEPT_SELECTED))
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("default-timer")
-            .assertContentDescriptionEquals("Global color allowance: Always color")
+            .assertContentDescriptionEquals("Global color allowance: Always")
     }
 
     @Test fun searchUsesLabelAndPackageAndSelectionIsImmediate() {

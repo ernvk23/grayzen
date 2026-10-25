@@ -88,7 +88,7 @@ class SnoozeCoordinator(
                 resumeFailed("Android refused to re-enable accessibility.")
             } else true
         } catch (_: SecurityException) {
-            resumeFailed("Missing secure settings. Re-enable Grayzen in Accessibility.")
+            resumeFailed("Missing secure settings. Re-enable the service in Accessibility.")
         } catch (_: RuntimeException) {
             resumeFailed("Couldn’t re-enable accessibility. Check Accessibility settings.")
         }

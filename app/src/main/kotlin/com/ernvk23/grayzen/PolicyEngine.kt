@@ -26,7 +26,7 @@ internal fun grayscaleDelayMinutes(
 }
 
 private const val PERMISSION_ERROR = "Missing secure-settings permission. Run the ADB setup."
-internal const val SERVICE_ERROR = "Enable Grayzen in Accessibility settings."
+internal const val SERVICE_ERROR = "Enable the service in Accessibility settings."
 private const val USAGE_UNAVAILABLE_ERROR = "Usage history unavailable. Check Usage Access."
 internal const val USAGE_ACCESS_ERROR = "Timed grayscale needs Usage Access. Open Setup."
 

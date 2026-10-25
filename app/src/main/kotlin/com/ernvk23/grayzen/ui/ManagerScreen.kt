@@ -358,7 +358,7 @@ fun ManagerContent(
                             onBack = { navigate(Destination.HOME) },
                             onCopy = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Grayzen ADB command", manager.adbCommand))
+                                clipboard.setPrimaryClip(ClipData.newPlainText("ADB command", manager.adbCommand))
                                 showMessage("ADB command copied")
                             },
                             onRefresh = refresh,
@@ -426,7 +426,7 @@ private fun WarningNote(
             Text(title, style = MaterialTheme.typography.titleMedium, color = GrayzenAmberSoft)
             Spacer(Modifier.height(3.dp))
             Text(
-                if (accessibility) "Enable Grayzen in Accessibility settings." else message,
+                if (accessibility) "Enable the service in Accessibility settings." else message,
                 style = MaterialTheme.typography.bodySmall,
                 color = GrayzenText,
             )
@@ -447,65 +447,69 @@ private fun HomeScreen(
     onAutoSnooze: () -> Unit,
     onResumeSnooze: () -> Unit,
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier.fillMaxSize().widthIn(max = 720.dp).testTag("home-screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item("settings") {
-            Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                IconButton(
-                    onClick = onSetup,
-                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = 12.dp).size(48.dp)
-                        .testTag("open-setup"),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_tabler_settings_filled),
-                        contentDescription = "Setup",
-                        tint = GrayzenText,
-                        modifier = Modifier.size(28.dp),
-                    )
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item("settings") {
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    IconButton(
+                        onClick = onSetup,
+                        modifier = Modifier.align(Alignment.CenterEnd).offset(x = 12.dp)
+                            .size(48.dp).testTag("open-setup"),
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_tabler_settings_filled),
+                            contentDescription = "Setup",
+                            tint = GrayzenText,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
                 }
             }
-        }
-        item("master") {
-            HomeMasterControl(
-                manager = manager,
-                apps = apps,
-                busy = busy,
-                motionEnabled = motionEnabled,
-                setEnabled = setEnabled,
-                onSetupRequired = onSetup,
-                onResumeSnooze = onResumeSnooze,
-            )
-        }
-        if (manager.managerEnabled) {
-            val warning = when {
-                !manager.serviceEnabled -> SERVICE_ERROR
-                error != null && error != SERVICE_ERROR -> error
-                else -> null
+            item("master") {
+                HomeMasterControl(
+                    manager = manager,
+                    apps = apps,
+                    busy = busy,
+                    motionEnabled = motionEnabled,
+                    setEnabled = setEnabled,
+                    onSetupRequired = onSetup,
+                    onResumeSnooze = onResumeSnooze,
+                )
             }
-            warning?.let { message -> item("warning") { WarningNote(message) } }
+            if (manager.managerEnabled) {
+                val warning = when {
+                    !manager.serviceEnabled -> SERVICE_ERROR
+                    error != null && error != SERVICE_ERROR -> error
+                    else -> null
+                }
+                warning?.let { message -> item("warning") { WarningNote(message) } }
+            }
+            item("grayscale-control") {
+                FeatureCard(
+                    icon = R.drawable.ic_tabler_contrast_2_filled,
+                    title = "Grayscale Control",
+                    description = "Pick apps and set their grayscale timing.",
+                    onClick = onGrayscale,
+                    testTag = "feature-grayscale",
+                )
+            }
+            item("auto-snooze") {
+                FeatureCard(
+                    icon = R.drawable.ic_tabler_alarm_snooze_filled,
+                    title = "Auto-Snooze Apps",
+                    description = "Pause for selected apps.",
+                    onClick = onAutoSnooze,
+                    testTag = "feature-auto-snooze",
+                )
+            }
         }
-        item("grayscale-control") {
-            FeatureCard(
-                icon = R.drawable.ic_tabler_contrast_2_filled,
-                title = "Grayscale Control",
-                description = "Pick apps and set their grayscale timing.",
-                onClick = onGrayscale,
-                testTag = "feature-grayscale",
-            )
-        }
-        item("auto-snooze") {
-            FeatureCard(
-                icon = R.drawable.ic_tabler_alarm_snooze_filled,
-                title = "Auto-Snooze Apps",
-                description = "Pause Grayzen for selected apps.",
-                onClick = onAutoSnooze,
-                testTag = "feature-auto-snooze",
-            )
-        }
-        item("author") { AuthorFooter() }
+        AuthorFooter()
     }
 }
 
@@ -520,7 +524,7 @@ private fun HomeMasterControl(
     onResumeSnooze: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 34.dp, bottom = 26.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 34.dp, bottom = 44.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         PowerToggle(manager, busy, motionEnabled, setEnabled, onSetupRequired)
@@ -565,7 +569,7 @@ private fun PowerToggle(
                     },
                 )
                 .semantics {
-                    contentDescription = "Grayzen grayscale control"
+                    contentDescription = "Grayscale control"
                     stateDescription = if (checked) "On" else "Off"
                 }
                 .testTag("master-switch"),
@@ -633,7 +637,7 @@ private fun SnoozeRecoveryRow(
         Spacer(Modifier.height(3.dp))
         Text(
             if (manager.managerEnabled) {
-                "Grant permission again to re-enable Grayzen."
+                "Grant permission again to re-enable the service."
             } else {
                 "Grant permission again to keep Auto-snooze ready."
             },
@@ -808,34 +812,45 @@ private fun AppSelectionScreen(
         item("header") {
             ScreenHeader(if (snoozeMode) "Auto-Snooze Apps" else "Grayscale Control", onBack)
         }
-        item("intro") {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+        if (snoozeMode) {
+            item("intro") {
                 Text(
-                    if (snoozeMode) {
-                        "Some apps dislike accessibility. Grayzen pauses its own permission for selected apps; use Open safely if detection fails."
-                    } else if (manager.policy == Policy.EXCEPT_SELECTED) {
-                        "Unchecked apps turn grayscale immediately; checked apps stay in color until their allowance runs out."
-                    } else {
-                        "Only checked apps turn grayscale, after their delay."
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (snoozeMode) GrayzenMuted else GrayzenText,
-                    modifier = Modifier.testTag(
-                        if (snoozeMode) "snooze-explanation" else "selector-question"
-                    ),
+                    "Some apps don't work with accessibility. Auto-Snooze pauses the service for them.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GrayzenMuted,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                        .testTag("snooze-explanation"),
                 )
             }
-        }
-        if (!snoozeMode) {
+        } else {
             item("policy-tabs") { PolicyTabs(manager.policy, !state.mutating, setPolicy) }
-            item("default-timer") {
-                DefaultTimerRow(
-                    minutes = manager.defaultGrayAfterMinutes,
-                    enabled = !state.mutating,
-                    policy = manager.policy,
-                    changed = setDefaultGrayAfterMinutes,
-                    resetAll = resetAllGrayAfterMinutes,
+            item("policy-explanation") {
+                Text(
+                    if (manager.policy == Policy.EXCEPT_SELECTED) {
+                        "Unchecked apps turn grayscale immediately; checked apps keep their color allowance. Per-app times override the default."
+                    } else {
+                        "Checked apps turn grayscale after the grayscale delay; unchecked apps stay in color. Per-app times override the default."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GrayzenMuted,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                        .testTag("selector-question"),
                 )
+            }
+            item("default-timer") {
+                Column {
+                    HorizontalDivider(
+                        Modifier.padding(horizontal = 20.dp),
+                        color = GrayzenBorder.copy(alpha = 0.55f),
+                    )
+                    DefaultTimerRow(
+                        minutes = manager.defaultGrayAfterMinutes,
+                        enabled = !state.mutating,
+                        policy = manager.policy,
+                        changed = setDefaultGrayAfterMinutes,
+                        resetAll = resetAllGrayAfterMinutes,
+                    )
+                }
             }
         }
         item("search") { SearchField(state.query, setQuery) }
@@ -980,24 +995,14 @@ private fun DefaultTimerRow(
 ) {
     val exceptionMode = policy == Policy.EXCEPT_SELECTED
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                if (exceptionMode) "Color allowance" else "Grayscale delay",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                if (exceptionMode) {
-                    "default time in color for checked apps; app-specific times override"
-                } else {
-                    "default for checked apps; app-specific times override"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = GrayzenMuted,
-            )
-        }
+        Text(
+            if (exceptionMode) "Color allowance" else "Grayscale delay",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
         TimerPicker(
             label = timerLabel(minutes, policy),
             selected = minutes,
@@ -1207,7 +1212,7 @@ private fun DurationWheel(
 
 private fun timerLabel(minutes: Int, policy: Policy): String = when {
     minutes > 0 -> "$minutes min"
-    policy == Policy.EXCEPT_SELECTED -> "Always color"
+    policy == Policy.EXCEPT_SELECTED -> "Always"
     else -> "Immediate"
 }
 private fun timerChipLabel(minutes: Int) = "${minutes}m"
@@ -1313,8 +1318,7 @@ private fun AppRow(
                 modifier = Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)),
             )
         }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
             Text(app.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = GrayzenMuted)
         }
@@ -1396,14 +1400,6 @@ private fun SetupScreen(
         contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         item("header") { ScreenHeader("Setup", onBack) }
-        item("intro") {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text(
-                    "Permissions, timing, and optional Usage Access.",
-                    color = GrayzenMuted,
-                )
-            }
-        }
         error?.takeUnless { it == SERVICE_ERROR }?.let { message ->
             item("error") {
                 WarningNote(
@@ -1498,7 +1494,7 @@ private fun SetupScreen(
                 optional = true,
             ) {
                 Text(
-                    "Optional. Needed for daily time limits; history stays on this device.",
+                    "Powers daily time limits. History stays on this device.",
                     color = GrayzenMuted,
                 )
                 Spacer(Modifier.height(14.dp))
@@ -1510,9 +1506,6 @@ private fun SetupScreen(
                     trailingIcon = R.drawable.ic_tabler_external_link_filled,
                 )
             }
-        }
-        item("foreground-timing") {
-            ForegroundTimingCard(manager, onForegroundTimingChange)
         }
         item("privacy") {
             Column(
@@ -1542,6 +1535,31 @@ private fun SetupScreen(
                 )
             }
         }
+        item("advanced") {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HorizontalDivider(
+                    Modifier.weight(1f),
+                    color = GrayzenBorder.copy(alpha = 0.55f),
+                )
+                Text(
+                    "Advanced",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = GrayzenMuted,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                HorizontalDivider(
+                    Modifier.weight(1f),
+                    color = GrayzenBorder.copy(alpha = 0.55f),
+                )
+            }
+        }
+        item("foreground-timing") {
+            ForegroundTimingCard(manager, onForegroundTimingChange)
+        }
     }
 }
 
@@ -1561,10 +1579,12 @@ private fun ForegroundTimingCard(
             .testTag("timing-section"),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Advanced", style = MaterialTheme.typography.labelSmall, color = GrayzenAmber)
-                Text("Foreground timing", style = MaterialTheme.typography.titleMedium, color = GrayzenText)
-            }
+            Text(
+                "Foreground timing",
+                style = MaterialTheme.typography.titleMedium,
+                color = GrayzenText,
+                modifier = Modifier.weight(1f),
+            )
             TextButton(
                 onClick = { expanded = !expanded },
                 modifier = Modifier.testTag("timing-expand"),
@@ -1572,9 +1592,15 @@ private fun ForegroundTimingCard(
                 Text(if (expanded) "Hide" else "Show")
             }
         }
+        Text(
+            "Small waits that keep color correction from flickering while you switch apps.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = GrayzenMuted,
+        )
         if (expanded) {
+            Spacer(Modifier.height(10.dp))
             Text(
-                "Current: ${manager.settleDelayMs} / ${manager.confirmationMs} ms. Defaults: ${DEFAULT_BURST_MS} / ${DEFAULT_CONFIRMATION_MS} ms.",
+                "Current ${manager.settleDelayMs} / ${manager.confirmationMs} ms.",
                 color = GrayzenMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -1627,12 +1653,12 @@ private fun TimingDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "Burst settles window changes; confirmation needs the app twice. 0–$MAX_FOREGROUND_TIMING_MS ms; 0 disables the wait.",
+                    "Settle wait is the pause after the screen changes. Recheck wait is the second look before color correction switches, so the app must match twice. 0–$MAX_FOREGROUND_TIMING_MS ms; 0 turns the wait off.",
                     style = MaterialTheme.typography.bodySmall,
                     color = GrayzenMuted,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Common settings (burst / confirm)", style = MaterialTheme.typography.labelLarge)
+                Text("Common settings (settle / recheck)", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(PresetChipSpacing),
@@ -1669,7 +1695,7 @@ private fun TimingDialog(
                     onValueChange = { text ->
                         if (text.length <= 3 && text.all(Char::isDigit)) burstText = text
                     },
-                    label = { Text("Burst") },
+                    label = { Text("Settle wait") },
                     supportingText = {
                         Text("0–$MAX_FOREGROUND_TIMING_MS ms · default $DEFAULT_BURST_MS")
                     },
@@ -1685,7 +1711,7 @@ private fun TimingDialog(
                     onValueChange = { text ->
                         if (text.length <= 3 && text.all(Char::isDigit)) confirmationText = text
                     },
-                    label = { Text("Confirm") },
+                    label = { Text("Recheck wait") },
                     supportingText = {
                         Text("0–$MAX_FOREGROUND_TIMING_MS ms · default $DEFAULT_CONFIRMATION_MS")
                     },
