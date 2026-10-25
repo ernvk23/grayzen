@@ -27,6 +27,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
@@ -141,6 +142,7 @@ import com.ernvk23.grayzen.ManagerUiState
 import com.ernvk23.grayzen.ManagerViewModel
 import com.ernvk23.grayzen.MAX_FOREGROUND_TIMING_MS
 import com.ernvk23.grayzen.MAX_GRAY_AFTER_MINUTES
+import com.ernvk23.grayzen.PERMISSION_ERROR
 import com.ernvk23.grayzen.Policy
 import com.ernvk23.grayzen.SERVICE_ERROR
 import com.ernvk23.grayzen.R
@@ -309,6 +311,7 @@ fun ManagerContent(
                             onGrayscale = { navigate(Destination.GRAYSCALE_CONTROL) },
                             onAutoSnooze = { navigate(Destination.AUTO_SNOOZE_APPS) },
                             onResumeSnooze = resumeFromSnooze,
+                            onOpenAccessibility = openAccessibilitySettings,
                         )
                         Destination.GRAYSCALE_CONTROL -> AppSelectionScreen(
                             state = state,
@@ -393,11 +396,14 @@ private fun WarningNote(
     message: String,
     testTag: String = "home-warning",
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val accessibility = message == SERVICE_ERROR
+    val permission = message == PERMISSION_ERROR
     val usage = message == USAGE_ACCESS_ERROR || "Usage Access" in message
     val title = when {
         accessibility -> "Accessibility is off"
+        permission -> "Secure settings needed"
         usage -> "Usage Access needed"
         else -> "Action needed"
     }
@@ -405,6 +411,10 @@ private fun WarningNote(
         modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
             .background(GrayzenAmber.copy(alpha = 0.12f))
             .border(1.dp, GrayzenAmber.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+            .then(
+                if (onClick == null) Modifier
+                else Modifier.clickable(role = Role.Button, onClick = onClick)
+            )
             .padding(horizontal = 16.dp, vertical = 17.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically,
@@ -426,7 +436,7 @@ private fun WarningNote(
             Text(title, style = MaterialTheme.typography.titleMedium, color = GrayzenAmberSoft)
             Spacer(Modifier.height(3.dp))
             Text(
-                if (accessibility) "Enable the service in Accessibility settings." else message,
+                message,
                 style = MaterialTheme.typography.bodySmall,
                 color = GrayzenText,
             )
@@ -446,6 +456,7 @@ private fun HomeScreen(
     onGrayscale: () -> Unit,
     onAutoSnooze: () -> Unit,
     onResumeSnooze: () -> Unit,
+    onOpenAccessibility: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().widthIn(max = 720.dp).testTag("home-screen"),
@@ -484,11 +495,19 @@ private fun HomeScreen(
             }
             if (manager.managerEnabled) {
                 val warning = when {
-                    !manager.serviceEnabled -> SERVICE_ERROR
+                    !manager.permissionGranted -> PERMISSION_ERROR
+                    !manager.serviceEnabled && manager.snoozedForPackage == null -> SERVICE_ERROR
                     error != null && error != SERVICE_ERROR -> error
                     else -> null
                 }
-                warning?.let { message -> item("warning") { WarningNote(message) } }
+                warning?.let { message ->
+                    item("warning") {
+                        WarningNote(
+                            message,
+                            onClick = onOpenAccessibility.takeIf { message == SERVICE_ERROR },
+                        )
+                    }
+                }
             }
             item("grayscale-control") {
                 FeatureCard(
@@ -651,8 +670,7 @@ private fun SnoozeRecoveryRow(
             modifier = Modifier.align(Alignment.End).testTag("resume-snooze"),
         ) {
             Text(
-                if (manager.status == ManagerStatus.RESUMING) "Granting…"
-                else if (manager.managerEnabled) "Grant & Re-enable"
+                if (manager.managerEnabled) "Grant & Re-enable"
                 else "Grant Permission"
             )
         }
@@ -1471,6 +1489,7 @@ private fun SetupScreen(
                 number = "02",
                 title = "Enable accessibility",
                 ready = manager.serviceEnabled,
+                paused = manager.snoozedForPackage != null,
             ) {
                 Text(
                     "Reads only the focused app name. Enable it in Accessibility settings.",
@@ -1744,6 +1763,7 @@ private fun SetupStep(
     title: String,
     ready: Boolean,
     optional: Boolean = false,
+    paused: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Column(
@@ -1757,13 +1777,26 @@ private fun SetupStep(
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Box(
                 Modifier.clip(RoundedCornerShape(50)).background(
-                    if (ready) Color(0xFF314232) else GrayzenSurfaceRaised
+                    when {
+                        ready -> Color(0xFF314232)
+                        paused -> GrayzenAmber.copy(alpha = 0.18f)
+                        else -> GrayzenSurfaceRaised
+                    }
                 ).padding(horizontal = 9.dp, vertical = 5.dp),
             ) {
                 Text(
-                    if (ready) "Ready" else if (optional) "Optional" else "Needed",
+                    when {
+                        ready -> "Ready"
+                        paused -> "Paused"
+                        optional -> "Optional"
+                        else -> "Needed"
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (ready) Color(0xFFB9E3BB) else GrayzenMuted,
+                    color = when {
+                        ready -> Color(0xFFB9E3BB)
+                        paused -> GrayzenAmberSoft
+                        else -> GrayzenMuted
+                    },
                 )
             }
         }

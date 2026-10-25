@@ -94,19 +94,20 @@ class ManagerScreenTest {
         compose.onNodeWithText("Grayzen is ready.").assertDoesNotExist()
         compose.onNodeWithText("Two small steps", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Enable USB debugging", substring = true).assertExists()
-        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-usage-access"))
-        compose.onNodeWithText("Needed for daily time limits", substring = true).assertExists()
-        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("information-block"))
-        compose.onNodeWithTag("information-block").assertExists()
-        compose.onNodeWithText("For Your Information").assertExists()
-        compose.onNodeWithContentDescription("Information").assertExists()
         compose.onNodeWithText(
             "adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS"
         ).assertExists()
         compose.onNodeWithText("Copy").assertExists()
         compose.onNodeWithText("Check").assertExists()
-        compose.onNodeWithText("Accessibility Settings").assertExists()
         compose.onNodeWithText("Finish setup").assertDoesNotExist()
+        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-accessibility"))
+        compose.onNodeWithText("Accessibility Settings").assertExists()
+        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-usage-access"))
+        compose.onNodeWithText("Powers daily time limits", substring = true).assertExists()
+        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("information-block"))
+        compose.onNodeWithTag("information-block").assertExists()
+        compose.onNodeWithText("For Your Information").assertExists()
+        compose.onNodeWithContentDescription("Information").assertExists()
     }
 
     @Test fun readySetupHasNoFinishSetupAction() {
@@ -208,11 +209,17 @@ class ManagerScreenTest {
         compose.onNodeWithText("Optional").assertExists()
     }
 
-    @Test fun homeShowsReadOnlyAccessibilityWarning() {
-        setContent(snapshot(service = false).copy(managerEnabled = true, error = SERVICE_ERROR))
-        compose.onNodeWithTag("home-warning").assertExists().assertHasNoClickAction()
+    @Test fun homeAccessibilityWarningOpensAndroidSettings() {
+        var opened = 0
+        setContent(
+            snapshot(service = false).copy(managerEnabled = true, error = SERVICE_ERROR),
+            openAccessibility = { opened++ },
+        )
         compose.onNodeWithText("Accessibility is off").assertExists()
-        compose.onNodeWithText("Enable the service in Accessibility settings.").assertExists()
+        compose.onNodeWithText(SERVICE_ERROR).assertExists()
+        compose.onNodeWithText("Try Reconnect").assertDoesNotExist()
+        compose.onNodeWithTag("home-warning").performClick()
+        assertEquals(1, opened)
     }
 
     @Test fun accessibilityWarningIsNotRepeatedInGrayscaleControl() {
@@ -220,6 +227,48 @@ class ManagerScreenTest {
         compose.onNodeWithTag("feature-grayscale").performClick()
         compose.onNodeWithTag("home-warning").assertDoesNotExist()
         compose.onNodeWithTag("manager-error").assertDoesNotExist()
+    }
+
+    @Test fun snoozeHidesHomeAccessibilityWarning() {
+        setContent(
+            snapshot(service = false).copy(
+                managerEnabled = true,
+                snoozedForPackage = "camera",
+                status = ManagerStatus.SNOOZED,
+            )
+        )
+        compose.onNodeWithTag("snooze-recovery").assertExists()
+        compose.onNodeWithTag("home-warning").assertDoesNotExist()
+    }
+
+    @Test fun snoozeMarksAccessibilitySetupAsPaused() {
+        setContent(
+            snapshot(service = false).copy(
+                managerEnabled = true,
+                snoozedForPackage = "camera",
+                status = ManagerStatus.SNOOZED,
+            )
+        )
+        compose.onNodeWithTag("open-setup").performClick()
+        compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("open-accessibility"))
+        compose.onNodeWithText("Paused").assertExists()
+        compose.onNodeWithText("Needed").assertDoesNotExist()
+    }
+
+    @Test fun missingPermissionGuidanceWinsOverServiceWarning() {
+        setContent(
+            snapshot(permission = false, service = false).copy(
+                managerEnabled = true,
+                error = SERVICE_ERROR,
+            )
+        )
+        compose.onNodeWithText("Secure settings needed").assertExists()
+        compose.onNodeWithText(
+            "Missing secure-settings permission. Run the ADB setup."
+        ).assertExists()
+        compose.onNodeWithText(
+            SERVICE_ERROR
+        ).assertDoesNotExist()
     }
 
     @Test fun positiveDelayWithoutUsageAccessShowsBanner() {
@@ -508,6 +557,7 @@ class ManagerScreenTest {
         toggleSnooze: (String, Boolean) -> Boolean = { _, _ -> true },
         openSafely: (String) -> Unit = {},
         resume: () -> Unit = {},
+        openAccessibility: () -> Unit = {},
         setDefaultGrayAfterMinutes: (Int) -> Unit = {},
         resetAllGrayAfterMinutes: () -> Unit = {},
         setGrayAfterMinutes: (String, Int?) -> Unit = { _, _ -> },
@@ -526,7 +576,7 @@ class ManagerScreenTest {
                     setGrayAfterMinutes = setGrayAfterMinutes,
                     setForegroundTiming = setForegroundTiming,
                     openUsageAccessSettings = openUsageAccess,
-                    refresh = {}, refreshApps = {}, openAccessibilitySettings = {},
+                    refresh = {}, refreshApps = {}, openAccessibilitySettings = openAccessibility,
                 )
             }
         }
