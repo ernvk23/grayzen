@@ -1,8 +1,10 @@
-# Grayscale per app
+# Grayzen
 
-Turns the screen gray while selected apps are open, then restores color when you leave them. Per-app daily limits and auto-snooze are available.
+Per-app grayscale with usage-based timing and auto-snooze. Turns your screen gray for selected apps and restores color when you leave them. Uses Android's accessibility service only to detect the current app; no screen reading or internet access.
 
-It uses Android's accessibility service only to detect which app is in front. It never reads what is on screen, and it has no internet access.
+## Samples
+
+[![Grayzen screenshots](img/samples.webp)](img/samples.webp)
 
 ## Install
 
