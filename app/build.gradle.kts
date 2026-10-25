@@ -11,6 +11,9 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+val versionNameOverride = providers.gradleProperty("versionName").orNull
+val versionCodeOverride = providers.gradleProperty("versionCode").orNull
+
 android {
     namespace = "com.ernvk23.grayzen"
     compileSdk = 37
@@ -30,8 +33,8 @@ android {
         applicationId = "com.ernvk23.grayzen"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = versionCodeOverride?.toInt() ?: 10000
+        versionName = versionNameOverride ?: "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
