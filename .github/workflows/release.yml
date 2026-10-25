@@ -92,10 +92,12 @@ jobs:
         run: |
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
           if [ -n "$PREVIOUS_TAG" ]; then
-            CHANGES=$(git log --no-merges --pretty=format:'- %s' "$PREVIOUS_TAG..$GITHUB_REF_NAME")
+            RANGE="$PREVIOUS_TAG..$GITHUB_REF_NAME"
           else
-            CHANGES=$(git log --no-merges --pretty=format:'- %s' "$GITHUB_REF_NAME")
+            RANGE="$GITHUB_REF_NAME"
           fi
+          CHANGES=$(git log --no-merges --invert-grep --extended-regexp \
+            --grep='^(build|docs)(\(.+\))?:' --pretty=format:'- %s' "$RANGE")
           {
             echo "Applies Android Color correction from the foreground app."
             echo

@@ -17,6 +17,7 @@ Native Android app (Kotlin, Compose) that applies Android Color correction from 
 - Secure-setting writes on the main thread; usage queries on the single worker.
 - Package-only foreground detection: no screen content, gestures, overlays, or foreground service.
 - No new dependencies, DI, navigation, database, accounts, or network.
+- Release notes omit commits whose subject starts with `build:` or `docs:` (including scoped forms). Use those types for changes that should not appear in release notes.
 
 ## Tests
 
