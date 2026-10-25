@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -89,8 +90,29 @@ class ManagerController private constructor(private val context: Context) : Mana
     private val notifications = SnoozeNotificationManager(context)
     private val handler = Handler(Looper.getMainLooper())
     private var transitionStatus: ManagerStatus? = null
+    private var currentServiceSession: Any? = null
+    private var reconnectAttemptConsumed: Boolean
+        get() = preferences.getBoolean(KEY_RECONNECT_ATTEMPT_CONSUMED, false)
+        set(value) {
+            preferences.edit().putBoolean(KEY_RECONNECT_ATTEMPT_CONSUMED, value).commit()
+        }
 
-    val engine = PolicyEngine(context.packageName, object : StateStore {
+    private val recovery: AccessibilityReconnectCoordinator = AccessibilityReconnectCoordinator(
+        accessibility = accessibilitySettings,
+        managerActive = {
+            engine.state.managerEnabled && engine.state.snoozedForPackage == null
+        },
+        hasPermission = secureAccess::hasPermission,
+        entryPresent = {
+            runCatching { accessibilitySettings.isOwnServiceEnabled() }.getOrDefault(false)
+        },
+        serviceConnected = ::isServiceEnabled,
+        attemptConsumed = { reconnectAttemptConsumed },
+        consumeAttempt = { reconnectAttemptConsumed = true },
+        rearmAttempt = { reconnectAttemptConsumed = false },
+    )
+
+    val engine: PolicyEngine = PolicyEngine(context.packageName, object : StateStore {
         override fun read(): ManagerState {
             val policy = runCatching {
                 Policy.valueOf(preferences.getString("policy", null) ?: "ONLY_SELECTED")
@@ -174,7 +196,10 @@ class ManagerController private constructor(private val context: Context) : Mana
         },
     )
 
-    init { publishState() }
+    init {
+        observeAccessibilityChanges()
+        publishState()
+    }
 
     override fun setEnabled(enabled: Boolean) = onMain {
         if (!enabled && engine.state.snoozedForPackage != null) snooze.cancelByTurningOff()
@@ -241,7 +266,8 @@ class ManagerController private constructor(private val context: Context) : Mana
         return snooze.automatic(packageName, disableSelf).also { publishState() }
     }
 
-    fun onServiceConnected() {
+    fun onServiceConnected(session: Any) {
+        currentServiceSession = session
         handler.removeCallbacksAndMessages(RESUME_TOKEN)
         snooze.onServiceConnected()
         refreshUsageAccess()
@@ -249,8 +275,13 @@ class ManagerController private constructor(private val context: Context) : Mana
         publishState()
     }
 
-    fun onServiceDisconnected() {
+    fun onServiceDisconnected(session: Any) {
+        // Ignore duplicate and stale service-session callbacks.
+        if (currentServiceSession !== session) return
+        currentServiceSession = null
+        recovery.onDisconnected()
         engine.onDisconnected()
+        if (!secureAccess.hasPermission()) engine.checkPrerequisites()
         publishState()
     }
 
@@ -261,6 +292,8 @@ class ManagerController private constructor(private val context: Context) : Mana
 
     override fun refreshPrerequisites() = onMain {
         refreshUsageAccess()
+        recovery.rearmIfConnected()
+        recovery.reassess()
         engine.refreshPrerequisites()
         publishState()
     }
@@ -311,6 +344,31 @@ class ManagerController private constructor(private val context: Context) : Mana
             }
     }
 
+    private fun observeAccessibilityChanges() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.getSystemService(AccessibilityManager::class.java)
+                ?.addAccessibilityServicesStateChangeListener { _ ->
+                    requestRecoveryAssessment()
+                }
+            return
+        }
+        // No public per-service listener before API 33; observe the enabled-services setting.
+        context.contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor(SecureAccessibilitySettings.ENABLED_SERVICES),
+            false,
+            object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean) = requestRecoveryAssessment()
+            },
+        )
+    }
+
+    private fun requestRecoveryAssessment() {
+        handler.post {
+            recovery.reassess()
+            publishState()
+        }
+    }
+
     fun activeHomePackages(): Set<String> {
         if (Build.VERSION.SDK_INT >= 29) {
             // RoleManager exposes no holders, so resolve the role's HOME intent.
@@ -338,6 +396,7 @@ class ManagerController private constructor(private val context: Context) : Mana
 
         private val RESUME_TOKEN = Any()
         private const val RESUME_TIMEOUT_MS = 8_000L
+        private const val KEY_RECONNECT_ATTEMPT_CONSUMED = "reconnectAttemptConsumed"
 
         private fun parseGrayAfter(values: Set<String>): Map<String, Int> =
             values.mapNotNull { entry ->

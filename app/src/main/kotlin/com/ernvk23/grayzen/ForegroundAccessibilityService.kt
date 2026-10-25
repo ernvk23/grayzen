@@ -26,6 +26,7 @@ class ForegroundAccessibilityService : AccessibilityService() {
     private val powerManager by lazy { getSystemService(PowerManager::class.java) }
     private val classifier = ForegroundWindowClassifier()
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceSession = Any()
     private var launchablePackages = emptySet<String>()
     private var homePackages = emptySet<String>()
     private var callbackRegistered = false
@@ -108,7 +109,7 @@ class ForegroundAccessibilityService : AccessibilityService() {
             )
             screenReceiverRegistered = true
         }
-        controller.onServiceConnected()
+        controller.onServiceConnected(serviceSession)
         screenInactive = powerManager?.isInteractive == false ||
             keyguardManager?.isKeyguardLocked == true
         if (screenInactive) {
@@ -209,13 +210,13 @@ class ForegroundAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         cancelChecks()
         unregisterScreenReceiver()
-        controller.onServiceDisconnected()
+        controller.onServiceDisconnected(serviceSession)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         cancelChecks()
-        controller.onServiceDisconnected()
+        controller.onServiceDisconnected(serviceSession)
         if (callbackRegistered) launcherApps.unregisterCallback(packagesChanged)
         unregisterScreenReceiver()
         super.onDestroy()
