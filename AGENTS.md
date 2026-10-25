@@ -18,6 +18,14 @@ Native Android app (Kotlin, Compose) that applies Android Color correction from 
 - Package-only foreground detection: no screen content, gestures, overlays, or foreground service.
 - No new dependencies, DI, navigation, database, accounts, or network.
 
+## Tests
+
+- Add tests only for vital behavior: a required outcome or a concrete regression worth preventing. Identify the failure each new test would catch; omit tests without one.
+- Use the smallest set of meaningful cases. Extend existing coverage where possible; skip new tests when existing tests already protect the behavior or the change has no meaningful behavioral risk.
+- Assert observable outcomes against requirements. Avoid filler, duplicate cases, implementation-mirroring assertions, and mocks that merely confirm their own setup.
+- Regression tests must catch the original bug. Derive expectations from intended behavior, not current output; never weaken valid assertions just to make tests green.
+- Run relevant existing checks even when no new tests are needed.
+
 ## Map
 
 - `ManagerController` / `ManagerViewModel`: preferences and state.
