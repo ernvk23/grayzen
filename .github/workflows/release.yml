@@ -70,7 +70,7 @@ jobs:
       - name: Package and verify
         run: |
           mkdir -p dist
-          APK="dist/grayzen-$VERSION.apk"
+          APK="dist/grayzen.apk"
           cp app/build/outputs/apk/release/*.apk "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK"
           echo "APK_SHA256=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_ENV"
@@ -96,7 +96,7 @@ jobs:
               printf '%s\n' "$CHANGES"
             fi
           } > release-notes.md
-          gh release create "$GITHUB_REF_NAME" "dist/grayzen-$VERSION.apk" \
+          gh release create "$GITHUB_REF_NAME" "dist/grayzen.apk" \
             --title "$GITHUB_REF_NAME" \
             --notes-file release-notes.md \
             --verify-tag

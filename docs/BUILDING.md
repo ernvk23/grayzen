@@ -59,7 +59,7 @@ A self-signed key is enough for sideloading. Play and F-Droid handle store signi
 
 ## Releases
 
-Pushing a `vMAJOR.MINOR.PATCH` tag runs [release.yml](../.github/workflows/release.yml). The workflow runs lint and unit tests, builds and verifies the signed APK, then publishes a GitHub release with `grayzen-<version>.apk`, the commit SHA, the APK SHA-256, and commits since the previous tag.
+Pushing a `vMAJOR.MINOR.PATCH` tag runs [release.yml](../.github/workflows/release.yml). The workflow runs lint and unit tests, builds and verifies the signed APK, then publishes a GitHub release with `grayzen.apk`, the commit SHA, the APK SHA-256, and commits since the previous tag.
 
 Add these repository secrets once:
 
