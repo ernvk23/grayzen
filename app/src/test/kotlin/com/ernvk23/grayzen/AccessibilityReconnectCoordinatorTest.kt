@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

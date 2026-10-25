@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
@@ -43,8 +43,8 @@ import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
-import com.ernvk23.grayzen.ui.GrayzenTheme
-import com.ernvk23.grayzen.ui.ManagerContent
+import io.github.ernvk23.grayzen.ui.GrayzenTheme
+import io.github.ernvk23.grayzen.ui.ManagerContent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -95,7 +95,7 @@ class ManagerScreenTest {
         compose.onNodeWithText("Two small steps", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Enable USB debugging", substring = true).assertExists()
         compose.onNodeWithText(
-            "adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS"
+            "adb shell pm grant io.github.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS"
         ).assertExists()
         compose.onNodeWithText("Copy").assertExists()
         compose.onNodeWithText("Check").assertExists()
@@ -521,11 +521,11 @@ class ManagerScreenTest {
 
     @Test fun ownAppIsDisabled() {
         setContent(
-            snapshot = snapshot(selected = setOf("com.ernvk23.grayzen")),
-            apps = listOf(app("Grayzen", "com.ernvk23.grayzen")),
+            snapshot = snapshot(selected = setOf("io.github.ernvk23.grayzen")),
+            apps = listOf(app("Grayzen", "io.github.ernvk23.grayzen")),
         )
         compose.onNodeWithTag("feature-grayscale").performClick()
-        compose.onNodeWithTag("app:com.ernvk23.grayzen").assertIsNotEnabled()
+        compose.onNodeWithTag("app:io.github.ernvk23.grayzen").assertIsNotEnabled()
         compose.onNodeWithText("Always in color", substring = true).assertExists()
     }
 
@@ -601,7 +601,7 @@ class ManagerScreenTest {
         service: Boolean = true,
         selected: Set<String> = emptySet(),
     ) = ManagerSnapshot(
-        "com.ernvk23.grayzen", permission, service, false, Policy.ONLY_SELECTED,
+        "io.github.ernvk23.grayzen", permission, service, false, Policy.ONLY_SELECTED,
         selected, null, null, null,
     )
 

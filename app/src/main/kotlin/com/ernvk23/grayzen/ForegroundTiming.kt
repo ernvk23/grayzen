@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 const val DEFAULT_BURST_MS = 150
 const val DEFAULT_CONFIRMATION_MS = 100

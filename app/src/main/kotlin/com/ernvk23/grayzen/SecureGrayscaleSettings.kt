@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 /** Provider seam for testing write ordering and failures without Android. */
 interface SecureSettingsAccess {

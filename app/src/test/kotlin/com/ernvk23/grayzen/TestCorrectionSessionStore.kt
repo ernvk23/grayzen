@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 internal class TestCorrectionSessionStore : CorrectionSessionStore {
     var session: CorrectionSession? = null

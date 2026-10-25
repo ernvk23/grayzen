@@ -34,7 +34,7 @@ Native Android app (Kotlin, Compose) that applies Android Color correction from 
 - `ForegroundAccessibilityService` / `ForegroundWindowClassifier`: window classification.
 - `SnoozeCoordinator` / `SecureAccessibilitySettings` / `SnoozeNotificationManager`: snooze and recovery.
 - `ui/ManagerScreen.kt`: Home, Grayscale Control, Auto-Snooze, Setup.
-- Namespace and application ID: `com.ernvk23.grayzen`.
+- Namespace and application ID: `io.github.ernvk23.grayzen`.
 
 ## Device
 

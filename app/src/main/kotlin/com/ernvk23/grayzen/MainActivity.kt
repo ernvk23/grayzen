@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import android.content.Intent
 import android.os.Bundle
@@ -8,8 +8,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
-import com.ernvk23.grayzen.ui.GrayzenTheme
-import com.ernvk23.grayzen.ui.ManagerScreen
+import io.github.ernvk23.grayzen.ui.GrayzenTheme
+import io.github.ernvk23.grayzen.ui.ManagerScreen
 
 class MainActivity : ComponentActivity() {
     private val controller by lazy { ManagerController.get(this) }

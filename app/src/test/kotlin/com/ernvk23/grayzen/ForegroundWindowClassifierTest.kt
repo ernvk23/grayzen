@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,7 +18,7 @@ class ForegroundWindowClassifierTest {
     }
 
     @Test fun focusedOwnWindowIsAuthoritative() {
-        val own = "com.ernvk23.grayzen"
+        val own = "io.github.ernvk23.grayzen"
         assertTrue(classifier.isOwnWindowFocused(listOf(app(own)), own))
         assertFalse(classifier.isOwnWindowFocused(listOf(app(own, focused = false)), own))
         assertFalse(classifier.isOwnWindowFocused(listOf(app(own, pip = true)), own))

@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import android.app.usage.UsageEvents
 import java.time.Instant

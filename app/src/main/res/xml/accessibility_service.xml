@@ -9,4 +9,4 @@
     android:isAccessibilityTool="false"
     tools:targetApi="s"
     android:description="@string/accessibility_service_description"
-    android:settingsActivity="com.ernvk23.grayzen.MainActivity" />
+    android:settingsActivity="io.github.ernvk23.grayzen.MainActivity" />

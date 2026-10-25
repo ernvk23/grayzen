@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -84,7 +84,7 @@ class SnoozeNotificationManager(private val context: Context) : SnoozeNotificati
         // Channel importance cannot be raised after creation; a new ID migrates old installs.
         const val CHANNEL_ID = "snooze_recovery_active"
         const val NOTIFICATION_ID = 120
-        const val ACTION_RESUME = "com.ernvk23.grayzen.action.RESUME_SNOOZE"
+        const val ACTION_RESUME = "io.github.ernvk23.grayzen.action.RESUME_SNOOZE"
         internal const val LAUNCH_REQUEST_CODE = 42
         internal const val RESUME_REQUEST_CODE = 43
 

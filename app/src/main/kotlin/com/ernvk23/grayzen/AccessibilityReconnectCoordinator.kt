@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 /** One immediate disable/enable attempt; no timers or automatic retries. */
 class AccessibilityReconnectCoordinator(

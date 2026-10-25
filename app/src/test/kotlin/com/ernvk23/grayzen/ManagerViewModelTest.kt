@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -167,7 +167,7 @@ class ManagerViewModelTest {
         }
         companion object {
             fun snapshot() = ManagerSnapshot(
-                "com.ernvk23.grayzen", true, true, false, Policy.ONLY_SELECTED,
+                "io.github.ernvk23.grayzen", true, true, false, Policy.ONLY_SELECTED,
                 emptySet(), null, null, null,
             )
         }

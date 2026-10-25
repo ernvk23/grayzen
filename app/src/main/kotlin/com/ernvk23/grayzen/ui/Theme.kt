@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen.ui
+package io.github.ernvk23.grayzen.ui
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme

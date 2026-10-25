@@ -1,4 +1,4 @@
-package com.ernvk23.grayzen
+package io.github.ernvk23.grayzen
 
 import org.junit.Assert.*
 import org.junit.Test
@@ -25,14 +25,14 @@ class SecureAccessibilitySettingsTest {
     }
 
     private fun subject(access: Access) = SecureAccessibilitySettings(
-        "com.ernvk23.grayzen", "com.ernvk23.grayzen.ForegroundAccessibilityService", access
+        "io.github.ernvk23.grayzen", "io.github.ernvk23.grayzen.ForegroundAccessibilityService", access
     )
 
     @Test fun enablesFromEmptyList() {
         val access = Access(null)
         assertTrue(subject(access).enableOwnService())
         assertEquals(
-            "com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService",
+            "io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService",
             access.value,
         )
     }
@@ -42,7 +42,7 @@ class SecureAccessibilitySettingsTest {
         assertTrue(subject(access).enableOwnService())
         assertEquals(
             "talkback/service:reader/.Service:" +
-                "com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService",
+                "io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService",
             access.value,
         )
         assertEquals(listOf(SecureAccessibilitySettings.ACCESSIBILITY_ENABLED to 1), access.intWrites)
@@ -51,8 +51,8 @@ class SecureAccessibilitySettingsTest {
     @Test fun enableIsIdempotentForDuplicateOwnEntries() {
         val access = Access(
             "other/.Service:" +
-                "com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService:" +
-                "com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService"
+                "io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService:" +
+                "io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService"
         )
         assertTrue(subject(access).enableOwnService())
         assertTrue(access.stringWrites.isEmpty())
@@ -61,7 +61,7 @@ class SecureAccessibilitySettingsTest {
     @Test fun disableRemovesOnlyOwnComponentAndPreservesEverythingElse() {
         val access = Access(
             "talkback/.TalkBack:" +
-                "com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService:" +
+                "io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService:" +
                 "reader/reader.Service"
         )
         assertTrue(subject(access).disableOwnService())
@@ -76,7 +76,7 @@ class SecureAccessibilitySettingsTest {
         access.value = "concurrently.changed/.Service"
         subject.enableOwnService()
         assertEquals(
-            "concurrently.changed/.Service:com.ernvk23.grayzen/com.ernvk23.grayzen.ForegroundAccessibilityService",
+            "concurrently.changed/.Service:io.github.ernvk23.grayzen/io.github.ernvk23.grayzen.ForegroundAccessibilityService",
             access.value,
         )
     }

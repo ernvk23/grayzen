@@ -19,7 +19,7 @@ On the PC:
 ```sh
 curl -fL -o grayzen.apk https://github.com/ernvk23/grayzen/releases/latest/download/grayzen.apk &&
   adb install -r grayzen.apk &&
-  adb shell pm grant ernvk23.github.io android.permission.WRITE_SECURE_SETTINGS
+  adb shell pm grant io.github.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
 ```
 
 Then open the app and enable the accessibility service in Settings → Accessibility.
@@ -34,7 +34,7 @@ Then open the app and enable the accessibility service in Settings → Accessibi
 3. From a PC, grant the secure setting:
 
    ```sh
-   adb shell pm grant ernvk23.github.io android.permission.WRITE_SECURE_SETTINGS
+   adb shell pm grant io.github.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
    ```
 
 4. Open the app and complete setup. When asked, enable its accessibility service in Settings → Accessibility.

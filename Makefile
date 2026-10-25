@@ -1,7 +1,7 @@
 GRADLE ?= gradle
 ADB ?= adb$(if $(ANDROID_SERIAL), -s $(ANDROID_SERIAL),)
 COMPOSE ?= docker compose
-APP_ID ?= com.ernvk23.grayzen
+APP_ID ?= io.github.ernvk23.grayzen
 KEYSTORE ?= release.keystore
 KEY_ALIAS ?= grayzen
 ACCESSIBILITY_COMPONENT ?= $(APP_ID)/$(APP_ID).ForegroundAccessibilityService

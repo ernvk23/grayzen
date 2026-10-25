@@ -17,7 +17,7 @@ val versionNameOverride = providers.gradleProperty("versionName").orNull
 val versionCodeOverride = providers.gradleProperty("versionCode").orNull
 
 android {
-    namespace = "com.ernvk23.grayzen"
+    namespace = "io.github.ernvk23.grayzen"
     compileSdk = 37
 
     signingConfigs {
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.ernvk23.grayzen"
+        applicationId = "io.github.ernvk23.grayzen"
         minSdk = 26
         targetSdk = 36
         versionCode = versionCodeOverride?.toInt() ?: 10000
