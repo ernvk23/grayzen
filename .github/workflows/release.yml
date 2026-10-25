@@ -97,6 +97,6 @@ jobs:
             fi
           } > release-notes.md
           gh release create "$GITHUB_REF_NAME" "dist/grayzen-$VERSION.apk" \
-            --title "Grayzen $GITHUB_REF_NAME" \
+            --title "grayzen-$VERSION" \
             --notes-file release-notes.md \
             --verify-tag
