@@ -5,7 +5,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystorePropertiesFile = rootProject.file(
+    providers.gradleProperty("keystoreProperties").orNull ?: "keystore.properties"
+)
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
