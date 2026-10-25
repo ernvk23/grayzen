@@ -1,57 +1,39 @@
-# Grayzen
+# Grayscale per app
 
-Applies Android Color correction based on the foreground app through an AccessibilityService.
+Turns the screen gray while selected apps are open, then restores color when you leave them. Per-app daily limits and auto-snooze are available.
 
-Inspired by Graycie, this branch streamlines a stripped-down version with a custom feature set: configurable foreground timing and per-app daily allowances.
+It uses Android's accessibility service only to detect which app is in front. It never reads what is on screen, and it has no internet access.
+
+> [!IMPORTANT]
+> Android does not let you grant this permission from Settings. Grant it once from a computer with ADB:
+>
+> ```sh
+> adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
+> ```
+
+## Install
+
+1. Download the latest `grayzen-*.apk` from [Releases](https://github.com/ernvk23/grayzen/releases).
+2. Install it on the phone.
+3. Run the ADB command above.
+4. Open the app and complete setup. When asked, enable its accessibility service in Settings → Accessibility.
+5. Optional: allow Usage Access if you want daily time limits.
+
+> [!NOTE]
+> Requires Android 8.0 or newer.
+
+> [!WARNING]
+> Turn the app off before uninstalling, otherwise the screen may stay gray.
 
 ## Build
 
-Host builds need JDK 25, Gradle 9.8.1, SDK 37, and `sdk.dir` or `ANDROID_HOME`.
+For source builds, see [docs/BUILDING.md](docs/BUILDING.md). Host builds need JDK 25, Gradle 9.8.1, and Android SDK 37; Docker builds need only Docker.
 
 ```sh
 make build
-make install
-```
-
-Docker needs only Docker. It uses the host `adb` for install:
-
-```sh
 make docker-build
-make docker-install
 ```
 
-`make build` and `make docker-build` write `dist/grayzen-debug.apk`. `make install` and `make docker-install` install that APK and grant secure settings. `make release` or `make docker-release` writes `dist/grayzen-release.apk`. `make help` lists everything.
+## Credits
 
-## Setup
-
-Enable **Grayzen** in Accessibility settings after installing. Usage Access is optional, for timed grayscale.
-
-For a manual install, grant secure settings once:
-
-```sh
-adb shell pm grant com.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS
-```
-
-`make dev-install` or `make docker-dev-install` handles this plus Usage Access and the accessibility service.
-
-## Signing
-
-Debug builds are auto-signed. Release builds are unsigned unless `keystore.properties` exists.
-
-```sh
-make keystore
-cp keystore.properties.example keystore.properties
-```
-
-Fill in the passwords, then run `make release` or `make docker-release`. To sign an existing unsigned APK later, use `apksigner` from the Android SDK build-tools:
-
-```sh
-apksigner sign --ks release.keystore --ks-key-alias grayzen \
-  --out dist/grayzen-signed.apk dist/grayzen-release.apk
-```
-
-A self-signed key is enough for sideloading. Play and F-Droid handle store signing separately. Never commit the keystore or properties.
-
-## Credit
-
-Based on [Graycie](https://github.com/abhigyantrips/Graycie) by Abhigyan Trips, GPL-3.0-or-later. Fork by [ernvk23](https://github.com/ernvk23). See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Based on [Graycie](https://github.com/abhigyantrips/Graycie), GPL-3.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md).
