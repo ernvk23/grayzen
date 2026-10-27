@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grayzen — Per-app grayscale for Android</title>
+    <meta name="description"
+        content="Per-app grayscale for Android. Turns the screen gray for selected apps and restores color when you leave them. No tracking, no network.">
+    <meta name="author" content="Edgar R.N">
+    <link rel="canonical" href="https://ernvk23.github.io/grayzen/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://ernvk23.github.io/grayzen/">
+    <meta property="og:title" content="Grayzen — Per-app grayscale for Android">
+    <meta property="og:description"
+        content="Turns the screen gray for selected apps and restores color when you leave them. No tracking, no network.">
+    <meta property="og:image" content="https://ernvk23.github.io/grayzen/img/og.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="474">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Grayzen — Per-app grayscale for Android">
+    <meta name="twitter:description"
+        content="Turns the screen gray for selected apps and restores color when you leave them. No tracking, no network.">
+    <meta name="twitter:image" content="https://ernvk23.github.io/grayzen/img/og.jpg">
+
+    <meta name="theme-color" content="#faf8f0" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1a1816" media="(prefers-color-scheme: dark)">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preload" href="assets/fonts/ShantellSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="assets/fonts/ShantellSans-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <main>
+        <section class="hero">
+            <img class="app-mark" src="favicon.svg" alt="" width="64" height="64">
+            <h1>Grayzen</h1>
+            <p class="tagline">Per-app grayscale for Android.</p>
+            <p class="lede">Turns the screen gray for the apps you choose and brings color back when you leave them.
+                No root, no tracking, no network.</p>
+            <div class="cta">
+                <a class="btn download"
+                    href="https://github.com/ernvk23/grayzen/releases/latest/download/grayzen.apk">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <path d="m7 10 5 5 5-5" />
+                        <path d="M12 15V3" />
+                    </svg>
+                    <span>Download APK</span>
+                </a>
+            </div>
+            <a class="scroll-cue" href="#features" aria-label="See features">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path
+                        d="M19 9L14 14.1599C13.7429 14.4323 13.4329 14.6493 13.089 14.7976C12.7451 14.9459 12.3745 15.0225 12 15.0225C11.6255 15.0225 11.2549 14.9459 10.9109 14.7976C10.567 14.6493 10.2571 14.4323 10 14.1599L5 9"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </a>
+        </section>
+
+        <section id="features">
+            <h2 class="section-label">What it does</h2>
+            <div class="cards">
+                <article class="feature">
+                    <h3>Per-app grayscale</h3>
+                    <p>Choose the apps that turn gray. Everything else stays colorful.</p>
+                </article>
+                <article class="feature">
+                    <h3>Auto-snooze</h3>
+                    <p>Pauses the service for apps that don't work with accessibility.</p>
+                </article>
+                <article class="feature">
+                    <h3>Daily limits</h3>
+                    <p>Use Android usage access to set daily time limits.</p>
+                </article>
+                <article class="feature">
+                    <h3>Restores color</h3>
+                    <p>Color returns when you leave an app or turn Grayzen off.</p>
+                </article>
+                <article class="feature">
+                    <h3>Private by design</h3>
+                    <p>Sees only the focused app's package name. No screen content, no internet.</p>
+                </article>
+                <article class="feature">
+                    <h3>Open source</h3>
+                    <p>
+                        <a href="https://github.com/ernvk23/grayzen" class="github-link"
+                            aria-label="See Grayzen source code on GitHub">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path
+                                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                            </svg>
+                            <span>See source code</span>
+                        </a>
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <figure class="shot">
+            <img src="img/samples.webp" width="2100" height="830" alt="Grayzen screens: grayscale control,
+                auto-snooze apps, setup, and advanced timing">
+        </figure>
+
+        <section>
+            <h2 class="section-label">Install</h2>
+            <ol class="steps">
+                <li>Download the latest APK from
+                    <a href="https://github.com/ernvk23/grayzen/releases">Releases</a> and install it.
+                    Android 8.0+.</li>
+                <li>From a computer with ADB, grant the secure setting:
+                    <pre><code>adb shell pm grant io.github.ernvk23.grayzen android.permission.WRITE_SECURE_SETTINGS</code></pre>
+                </li>
+                <li>Open Grayzen and enable its accessibility service in <strong>Settings →
+                        Accessibility</strong>.</li>
+            </ol>
+            <p class="note">Usage access is optional and only needed for daily limits. Turn Grayzen off before
+                uninstalling, or the screen may stay gray.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Grayzen by <a href="mailto:ernvk23@gmail.com">Edgar R.N</a>. Based on
+            <a href="https://github.com/abhigyantrips/Graycie">Graycie</a>. Open source under
+            <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a>.</p>
+        <a href="https://github.com/ernvk23/grayzen">GitHub</a>
+    </footer>
+</body>
+
+</html>
