@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.LauncherApps
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -193,8 +194,15 @@ class ForegroundAccessibilityService : AccessibilityService() {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun AccessibilityWindowInfo.toMetadata(): WindowMetadata {
-        val rootPackage = root?.packageName?.toString()
+        val shouldReadRoot = isFocused || isActive || type == ForegroundWindowClassifier.WINDOW_TYPE_APPLICATION
+        val rootPackage = if (shouldReadRoot) {
+            val node = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) getRoot(0) else root
+            val packageName = node?.packageName?.toString()
+            node?.recycle()
+            packageName
+        } else null
         return WindowMetadata(
             packageName = rootPackage,
             focused = isFocused,
