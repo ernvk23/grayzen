@@ -26,6 +26,7 @@ class ForegroundAccessibilityService : AccessibilityService() {
     private val keyguardManager by lazy { getSystemService(KeyguardManager::class.java) }
     private val powerManager by lazy { getSystemService(PowerManager::class.java) }
     private val classifier = ForegroundWindowClassifier()
+    private val recovery = ForegroundRecovery()
     private val handler = Handler(Looper.getMainLooper())
     private val serviceSession = Any()
     private var launchablePackages = emptySet<String>()
@@ -144,33 +145,29 @@ class ForegroundAccessibilityService : AccessibilityService() {
         // Stale deadlines or samples must not apply during a transition.
         controller.engine.onTransitionStarted()
         eventGeneration++
+        recovery.resetIfExhausted(SystemClock.uptimeMillis())
         val generation = eventGeneration
-        val state = controller.engine.state
-        val burstMs = state.settleDelayMs.toLong()
-        val stabilizer = TransitionStabilizer(state.confirmationMs.toLong())
-        val startedAt = SystemClock.uptimeMillis() + burstMs
+        val delayMs = controller.engine.state.settleDelayMs.toLong()
         handler.removeCallbacksAndMessages(RECHECK_TOKEN)
-        schedule(burstMs) { classifyForeground(generation, stabilizer, startedAt) }
+        schedule(delayMs) { classifyForeground(generation) }
     }
 
-    private fun classifyForeground(
-        generation: Long,
-        stabilizer: TransitionStabilizer,
-        startedAt: Long,
-    ) {
+    private fun classifyForeground(generation: Long) {
         if (generation != eventGeneration || screenInactive) return
         // The default Home app can change without its package being added, removed, or updated.
         homePackages = controller.activeHomePackages()
-        val elapsed = (SystemClock.uptimeMillis() - startedAt).coerceAtLeast(0)
-        val currentWindows = windows.map { it.toMetadata() }
+        val windowInfos = windows
+        val currentWindows = windowInfos.map { it.toMetadata() }
+        windowInfos.forEach { it.recycle() }
         if (classifier.isOwnWindowFocused(currentWindows, packageName)) {
+            recovery.reset()
             controller.engine.onForeground(packageName, true)
             return
         }
         val classification = classifier.classify(
             windows = currentWindows,
             launchablePackages = launchablePackages + homePackages,
-            retryExpired = stabilizer.retryExpired(elapsed),
+            retryExpired = recovery.retryExpired(SystemClock.uptimeMillis()),
         )
         if (BuildConfig.DEBUG) {
             val packages = currentWindows.mapNotNull { it.packageName }.distinct()
@@ -179,18 +176,20 @@ class ForegroundAccessibilityService : AccessibilityService() {
         if (classification !is ForegroundClassification.Settled) {
             controller.engine.onForegroundUnconfirmed()
         }
-        when (stabilizer.action(classification, elapsed)) {
-            TransitionAction.Apply -> {
+        when (val action = recovery.next(
+            classification, controller.engine.state.settleDelayMs, SystemClock.uptimeMillis(),
+        )) {
+            ForegroundRecoveryAction.Apply -> {
                 when (classification) {
                     is ForegroundClassification.Settled ->
                         controller.engine.onForeground(classification.packageName, true)
-                    else -> error("Only stable destinations can be applied")
+                    else -> error("Only clear destinations can be applied")
                 }
             }
-            TransitionAction.Retry -> schedule(stabilizer.nextDelayMs()) {
-                classifyForeground(generation, stabilizer, startedAt)
+            is ForegroundRecoveryAction.Retry -> schedule(action.delayMs) {
+                classifyForeground(generation)
             }
-            TransitionAction.Ignore -> controller.engine.onForegroundUncertain()
+            ForegroundRecoveryAction.Stop -> controller.engine.onForegroundUncertain()
         }
     }
 
@@ -238,6 +237,7 @@ class ForegroundAccessibilityService : AccessibilityService() {
 
     private fun cancelChecks() {
         eventGeneration++
+        recovery.reset()
         handler.removeCallbacksAndMessages(RECHECK_TOKEN)
     }
 

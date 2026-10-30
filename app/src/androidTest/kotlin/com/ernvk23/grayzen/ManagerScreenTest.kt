@@ -119,21 +119,24 @@ class ManagerScreenTest {
     }
 
     @Test fun foregroundTimingPickersReportChanges() {
-        val changes = mutableListOf<Pair<Int, Int>>()
+        val changes = mutableListOf<Int>()
         setContent(
-            snapshot = snapshot().copy(settleDelayMs = 150, confirmationMs = 100),
-            setForegroundTiming = { burst, confirmation -> changes += burst to confirmation },
+            snapshot = snapshot().copy(settleDelayMs = 150),
+            setForegroundTiming = { foreground -> changes += foreground },
         )
         compose.onNodeWithTag("open-setup").performClick()
         compose.onNodeWithTag("setup-screen").performScrollToNode(hasTestTag("timing-section"))
         compose.onNodeWithTag("timing-expand").performClick()
         compose.onNodeWithTag("timing-adjust").performClick()
-        compose.onNodeWithTag("timing-preset-100-50").performClick()
-        compose.onNodeWithTag("timing-burst-input").performTextReplacement("11")
+        compose.onNodeWithTag("timing-preset-0").performClick()
         compose.onNodeWithTag("timing-set").performClick()
-        assertEquals(11 to 50, changes.single())
+        assertEquals(0, changes.single())
+        compose.onNodeWithTag("timing-adjust").performClick()
+        compose.onNodeWithTag("timing-foreground-input").performTextReplacement("10")
+        compose.onNodeWithTag("timing-set").performClick()
+        assertEquals(listOf(0, 10), changes)
         compose.onNodeWithTag("timing-reset").performScrollTo().performClick()
-        assertEquals(150 to 100, changes.last())
+        assertEquals(25, changes.last())
     }
 
     @Test fun exactPolicyLabelsMapToExistingPolicies() {
@@ -561,7 +564,7 @@ class ManagerScreenTest {
         setDefaultGrayAfterMinutes: (Int) -> Unit = {},
         resetAllGrayAfterMinutes: () -> Unit = {},
         setGrayAfterMinutes: (String, Int?) -> Unit = { _, _ -> },
-        setForegroundTiming: (Int, Int) -> Unit = { _, _ -> },
+        setForegroundTiming: (Int) -> Unit = {},
         openUsageAccess: () -> Unit = {},
     ) {
         compose.setContent {

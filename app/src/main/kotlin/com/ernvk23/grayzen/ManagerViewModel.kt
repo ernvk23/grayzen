@@ -105,8 +105,8 @@ class ManagerViewModel internal constructor(
         if (minutes == null) values.remove(packageName) else values[packageName] = minutes
         controller.setGrayAfterMinutes(values)
     }
-    fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) = mutate {
-        controller.setForegroundTiming(settleDelayMs, confirmationMs)
+    fun setForegroundTiming(settleDelayMs: Int) = mutate {
+        controller.setForegroundTiming(settleDelayMs)
     }
     fun togglePackage(packageName: String, selected: Boolean) = mutate {
         val packages = _uiState.value.manager?.selectedPackages.orEmpty().toMutableSet()

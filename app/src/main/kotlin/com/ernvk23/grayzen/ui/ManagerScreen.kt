@@ -133,8 +133,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
-import io.github.ernvk23.grayzen.DEFAULT_BURST_MS
-import io.github.ernvk23.grayzen.DEFAULT_CONFIRMATION_MS
+import io.github.ernvk23.grayzen.DEFAULT_FOREGROUND_DELAY_MS
 import io.github.ernvk23.grayzen.InstalledApp
 import io.github.ernvk23.grayzen.ManagerSnapshot
 import io.github.ernvk23.grayzen.ManagerStatus
@@ -218,7 +217,7 @@ fun ManagerContent(
     setDefaultGrayAfterMinutes: (Int) -> Unit = {},
     resetAllGrayAfterMinutes: () -> Unit = {},
     setGrayAfterMinutes: (String, Int?) -> Unit = { _, _ -> },
-    setForegroundTiming: (Int, Int) -> Unit = { _, _ -> },
+    setForegroundTiming: (Int) -> Unit = {},
     togglePackage: (String, Boolean) -> Unit,
     toggleSnoozePackage: (String, Boolean) -> Boolean = { _, _ -> true },
     openSafely: (String) -> Unit = {},
@@ -1411,7 +1410,7 @@ private fun SetupScreen(
     onRefresh: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenUsageAccess: () -> Unit,
-    onForegroundTimingChange: (Int, Int) -> Unit,
+    onForegroundTimingChange: (Int) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().widthIn(max = 720.dp).testTag("setup-screen"),
@@ -1585,7 +1584,7 @@ private fun SetupScreen(
 @Composable
 private fun ForegroundTimingCard(
     manager: ManagerSnapshot,
-    onChange: (Int, Int) -> Unit,
+    onChange: (Int) -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var open by rememberSaveable { mutableStateOf(false) }
@@ -1619,7 +1618,7 @@ private fun ForegroundTimingCard(
         if (expanded) {
             Spacer(Modifier.height(10.dp))
             Text(
-                "Current ${manager.settleDelayMs} / ${manager.confirmationMs} ms.",
+                "Current ${manager.settleDelayMs} ms.",
                 color = GrayzenMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -1631,7 +1630,7 @@ private fun ForegroundTimingCard(
                     Text("Adjust timing")
                 }
                 TextButton(
-                    onClick = { onChange(DEFAULT_BURST_MS, DEFAULT_CONFIRMATION_MS) },
+                    onClick = { onChange(DEFAULT_FOREGROUND_DELAY_MS) },
                     modifier = Modifier.testTag("timing-reset"),
                 ) {
                     Text("Reset")
@@ -1642,11 +1641,10 @@ private fun ForegroundTimingCard(
     if (open) {
         TimingDialog(
             settleDelayMs = manager.settleDelayMs,
-            confirmationMs = manager.confirmationMs,
             onDismiss = { open = false },
-            onSelected = { burst, confirmation ->
+            onSelected = { foreground ->
                 open = false
-                onChange(burst, confirmation)
+                onChange(foreground)
             },
         )
     }
@@ -1655,16 +1653,12 @@ private fun ForegroundTimingCard(
 @Composable
 private fun TimingDialog(
     settleDelayMs: Int,
-    confirmationMs: Int,
     onDismiss: () -> Unit,
-    onSelected: (Int, Int) -> Unit,
+    onSelected: (Int) -> Unit,
 ) {
-    var burstText by rememberSaveable { mutableStateOf(settleDelayMs.toString()) }
-    var confirmationText by rememberSaveable { mutableStateOf(confirmationMs.toString()) }
-    val burstValue = burstText.toIntOrNull()
-    val confirmationValue = confirmationText.toIntOrNull()
-    val valid = burstValue != null && burstValue in 0..MAX_FOREGROUND_TIMING_MS &&
-        confirmationValue != null && confirmationValue in 0..MAX_FOREGROUND_TIMING_MS
+    var foregroundText by rememberSaveable { mutableStateOf(settleDelayMs.toString()) }
+    val foregroundValue = foregroundText.toIntOrNull()
+    val valid = foregroundValue != null && foregroundValue in 0..MAX_FOREGROUND_TIMING_MS
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = GrayzenSurfaceRaised,
@@ -1672,80 +1666,58 @@ private fun TimingDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "Settle wait is the pause after the screen changes. Recheck wait is the second look before color correction switches, so the app must match twice. 0–$MAX_FOREGROUND_TIMING_MS ms; 0 turns the wait off.",
+                    "Wait before checking the foreground app. Zero checks without an added wait. Unclear windows are rechecked automatically with increasing waits for up to one second.",
                     style = MaterialTheme.typography.bodySmall,
                     color = GrayzenMuted,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Common settings (settle / recheck)", style = MaterialTheme.typography.labelLarge)
+                Text("Common delays", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(PresetChipSpacing),
                     verticalArrangement = Arrangement.spacedBy(PresetChipSpacing),
                 ) {
                     listOf(
-                        DEFAULT_BURST_MS to DEFAULT_CONFIRMATION_MS,
-                        250 to 100,
-                        150 to 50,
-                        100 to 50,
-                        75 to 50,
-                    ).forEach { (burst, confirm) ->
-                        val label = if (burst == DEFAULT_BURST_MS && confirm == DEFAULT_CONFIRMATION_MS) {
-                            "Default $burst / $confirm"
+                        DEFAULT_FOREGROUND_DELAY_MS, 0, 10, 50, 100, 150,
+                    ).forEach { foreground ->
+                        val label = if (foreground == DEFAULT_FOREGROUND_DELAY_MS) {
+                            "Default $foreground ms"
                         } else {
-                            "$burst / $confirm"
+                            "$foreground ms"
                         }
                         FilterChip(
-                            selected = burstText == burst.toString() &&
-                                confirmationText == confirm.toString(),
+                            selected = foregroundText == foreground.toString(),
                             onClick = {
-                                burstText = burst.toString()
-                                confirmationText = confirm.toString()
+                                foregroundText = foreground.toString()
                             },
                             shape = GrayzenControlShape,
                             label = { Text(label) },
-                            modifier = Modifier.testTag("timing-preset-$burst-$confirm"),
+                            modifier = Modifier.testTag("timing-preset-$foreground"),
                         )
                     }
                 }
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
-                    value = burstText,
+                    value = foregroundText,
                     onValueChange = { text ->
-                        if (text.length <= 3 && text.all(Char::isDigit)) burstText = text
+                        if (text.length <= 3 && text.all(Char::isDigit)) foregroundText = text
                     },
-                    label = { Text("Settle wait") },
+                    label = { Text("Foreground delay") },
                     supportingText = {
-                        Text("0–$MAX_FOREGROUND_TIMING_MS ms · default $DEFAULT_BURST_MS")
+                        Text("0–$MAX_FOREGROUND_TIMING_MS ms · default $DEFAULT_FOREGROUND_DELAY_MS")
                     },
-                    isError = burstText.isNotEmpty() &&
-                        (burstValue == null || burstValue !in 0..MAX_FOREGROUND_TIMING_MS),
+                    isError = foregroundText.isNotEmpty() &&
+                        (foregroundValue == null || foregroundValue !in 0..MAX_FOREGROUND_TIMING_MS),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().testTag("timing-burst-input"),
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = confirmationText,
-                    onValueChange = { text ->
-                        if (text.length <= 3 && text.all(Char::isDigit)) confirmationText = text
-                    },
-                    label = { Text("Recheck wait") },
-                    supportingText = {
-                        Text("0–$MAX_FOREGROUND_TIMING_MS ms · default $DEFAULT_CONFIRMATION_MS")
-                    },
-                    isError = confirmationText.isNotEmpty() &&
-                        (confirmationValue == null || confirmationValue !in 0..MAX_FOREGROUND_TIMING_MS),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().testTag("timing-confirm-input"),
+                    modifier = Modifier.fillMaxWidth().testTag("timing-foreground-input"),
                 )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (valid) onSelected(burstValue, confirmationValue)
+                    if (valid) onSelected(foregroundValue)
                 },
                 enabled = valid,
                 modifier = Modifier.testTag("timing-set"),

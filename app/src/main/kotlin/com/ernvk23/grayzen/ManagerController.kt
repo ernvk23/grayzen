@@ -37,8 +37,7 @@ data class ManagerSnapshot(
     val grayAfterMinutes: Map<String, Int> = emptyMap(),
     val usageAccessGranted: Boolean = false,
     val usageError: String? = null,
-    val settleDelayMs: Int = DEFAULT_BURST_MS,
-    val confirmationMs: Int = DEFAULT_CONFIRMATION_MS,
+    val settleDelayMs: Int = DEFAULT_FOREGROUND_DELAY_MS,
 ) {
     val ready: Boolean get() = permissionGranted && serviceEnabled
     val adbCommand: String
@@ -53,7 +52,7 @@ interface ManagerStateSource {
     fun setSnoozePackages(packages: Set<String>) = Unit
     fun setDefaultGrayAfterMinutes(minutes: Int, clearOverrides: Boolean = false) = Unit
     fun setGrayAfterMinutes(packages: Map<String, Int>) = Unit
-    fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) = Unit
+    fun setForegroundTiming(settleDelayMs: Int) = Unit
     fun openSafely(packageName: String) = Unit
     fun resumeFromSnooze() = Unit
     fun refreshPrerequisites()
@@ -138,10 +137,7 @@ class ManagerController private constructor(private val context: Context) : Mana
                     preferences.getStringSet("grayAfterMinutes", emptySet())!!.toSet()
                 ).filterKeys { isTimedTarget(selectedPackages, it) },
                 settleDelayMs = sanitizeForegroundTimingMs(
-                    preferences.getInt("settleDelayMs", DEFAULT_BURST_MS)
-                ),
-                confirmationMs = sanitizeForegroundTimingMs(
-                    preferences.getInt("confirmationMs", DEFAULT_CONFIRMATION_MS)
+                    preferences.getInt("settleDelayMs", DEFAULT_FOREGROUND_DELAY_MS)
                 ),
             )
         }
@@ -160,7 +156,6 @@ class ManagerController private constructor(private val context: Context) : Mana
                 putString("error", state.error)
                 putInt("defaultGrayAfterMinutes", state.defaultGrayAfterMinutes)
                 putInt("settleDelayMs", state.settleDelayMs)
-                putInt("confirmationMs", state.confirmationMs)
                 putStringSet("grayAfterMinutes", state.grayAfterMinutes.map { (packageName, minutes) ->
                     "$packageName=$minutes"
                 }.toSet())
@@ -235,8 +230,8 @@ class ManagerController private constructor(private val context: Context) : Mana
         publishState()
     }
 
-    override fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) = onMain {
-        engine.setForegroundTiming(settleDelayMs, confirmationMs)
+    override fun setForegroundTiming(settleDelayMs: Int) = onMain {
+        engine.setForegroundTiming(settleDelayMs)
         publishState()
     }
 
@@ -329,7 +324,6 @@ class ManagerController private constructor(private val context: Context) : Mana
             usageAccessGranted = usageAccessGranted,
             usageError = state.usageError,
             settleDelayMs = state.settleDelayMs,
-            confirmationMs = state.confirmationMs,
         )
     }
 

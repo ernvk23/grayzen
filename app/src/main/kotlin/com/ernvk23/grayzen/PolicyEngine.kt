@@ -43,8 +43,7 @@ data class ManagerState(
     val defaultGrayAfterMinutes: Int = DEFAULT_GRAY_AFTER_MINUTES,
     val grayAfterMinutes: Map<String, Int> = emptyMap(),
     val usageError: String? = null,
-    val settleDelayMs: Int = DEFAULT_BURST_MS,
-    val confirmationMs: Int = DEFAULT_CONFIRMATION_MS,
+    val settleDelayMs: Int = DEFAULT_FOREGROUND_DELAY_MS,
 )
 
 internal fun ManagerState.isAutoSnoozeCandidate(packageName: String): Boolean =
@@ -154,10 +153,9 @@ class PolicyEngine(
         evaluate()
     }
 
-    fun setForegroundTiming(settleDelayMs: Int, confirmationMs: Int) {
+    fun setForegroundTiming(settleDelayMs: Int) {
         save(state.copy(
             settleDelayMs = sanitizeForegroundTimingMs(settleDelayMs),
-            confirmationMs = sanitizeForegroundTimingMs(confirmationMs),
         ))
     }
 

@@ -77,58 +77,87 @@ class ForegroundWindowClassifierTest {
         assertTrue(classifier.classify(listOf(missing), apps) is ForegroundClassification.Temporary)
     }
 
-    @Test fun stabilizerRequiresTwoMatchingDestinationSamples() {
-        val stabilizer = TransitionStabilizer()
+    @Test fun clearDestinationAppliesWithoutSecondSample() {
+        val recovery = ForegroundRecovery()
         val app = ForegroundClassification.Settled("app.one", "settled")
-        assertEquals(TransitionAction.Retry, stabilizer.action(app, 0))
-        assertEquals(TransitionAction.Apply, stabilizer.action(app, 100))
+        assertEquals(ForegroundRecoveryAction.Apply, recovery.next(app, initialDelayMs = 25, nowMs = 0))
     }
 
-    @Test fun changedDestinationRestartsConfirmation() {
-        val stabilizer = TransitionStabilizer()
-        val app = ForegroundClassification.Settled("app.one", "settled")
-        val second = ForegroundClassification.Settled("app.two", "settled")
-        assertEquals(TransitionAction.Retry, stabilizer.action(app, 0))
-        assertEquals(TransitionAction.Retry, stabilizer.action(second, 100))
-        assertEquals(TransitionAction.Apply, stabilizer.action(second, 200))
-    }
-
-    @Test fun stabilizerStopsRetryingIndeterminateStateAfterOneSecond() {
-        val stabilizer = TransitionStabilizer()
+    @Test fun zeroForegroundDelayStillUsesPositiveRecoveryWaits() {
+        val recovery = ForegroundRecovery()
         val temporary = ForegroundClassification.Temporary("transition")
-        assertEquals(TransitionAction.Retry, stabilizer.action(temporary, 999))
-        assertEquals(TransitionAction.Ignore, stabilizer.action(temporary, 1_000))
+        assertEquals(ForegroundRecoveryAction.Retry(5L), recovery.next(temporary, initialDelayMs = 0, nowMs = 0))
+        assertEquals(ForegroundRecoveryAction.Retry(7L), recovery.next(temporary, initialDelayMs = 0, nowMs = 5))
     }
 
-    @Test fun nonLaunchableSurfaceIsRecheckedDuringSettlementWindow() {
-        val stabilizer = TransitionStabilizer()
-        val systemUi = ForegroundClassification.NonLaunchable("system.ui", "transient")
-        assertEquals(TransitionAction.Retry, stabilizer.action(systemUi, 999))
-        assertEquals(TransitionAction.Ignore, stabilizer.action(systemUi, 1_000))
+    @Test fun recoveryGrowsUntilOneSecondOrTenRetries() {
+        val temporary = ForegroundClassification.Temporary("transition")
+        val cases = listOf(
+            Triple(10, listOf(13L, 17L, 22L, 29L, 37L, 48L, 63L, 82L, 106L, 138L), 555L),
+            Triple(20, listOf(26L, 34L, 44L, 57L, 74L, 97L, 125L, 163L, 212L, 168L), 1_000L),
+            Triple(25, listOf(33L, 42L, 55L, 71L, 93L, 121L, 157L, 204L, 224L), 1_000L),
+            Triple(50, listOf(65L, 85L, 110L, 143L, 186L, 241L, 170L), 1_000L),
+        )
+        for ((initialDelay, waits, recoveryDuration) in cases) {
+            val recovery = ForegroundRecovery()
+            var now = 10_000L + initialDelay
+            for (wait in waits) {
+                assertEquals(
+                    ForegroundRecoveryAction.Retry(wait),
+                    recovery.next(temporary, initialDelayMs = initialDelay, nowMs = now),
+                )
+                now += wait
+            }
+            assertEquals(10_000L + initialDelay + recoveryDuration, now)
+            assertTrue(recovery.retryExpired(now))
+            assertEquals(ForegroundRecoveryAction.Stop, recovery.next(temporary, initialDelay, now))
+        }
     }
 
-    @Test fun destinationFirstSeenAtDeadlineStillGetsConfirmationSample() {
-        val stabilizer = TransitionStabilizer()
+    @Test fun delayedCallbacksAreCappedByTheRecoveryWindow() {
+        val recovery = ForegroundRecovery()
+        val temporary = ForegroundClassification.Temporary("transition")
+        assertEquals(ForegroundRecoveryAction.Retry(33L), recovery.next(temporary, 25, 25))
+        assertEquals(ForegroundRecoveryAction.Retry(42L), recovery.next(temporary, 25, 900))
+        assertEquals(ForegroundRecoveryAction.Retry(55L), recovery.next(temporary, 25, 956))
+        assertEquals(ForegroundRecoveryAction.Retry(14L), recovery.next(temporary, 25, 1_011))
+        assertTrue(recovery.retryExpired(1_025))
+        assertEquals(ForegroundRecoveryAction.Stop, recovery.next(temporary, 25, 1_025))
+    }
+
+    @Test fun recoveryNeverSchedulesMoreThanTenRetries() {
+        val recovery = ForegroundRecovery()
+        val temporary = ForegroundClassification.Temporary("transition")
+        repeat(10) {
+            assertTrue(recovery.next(temporary, 10, 0) is ForegroundRecoveryAction.Retry)
+        }
+        assertTrue(recovery.isExhausted(0))
+        assertEquals(ForegroundRecoveryAction.Stop, recovery.next(temporary, 10, 0))
+    }
+
+    @Test fun missingRootRecoversToClearDestination() {
+        val recovery = ForegroundRecovery()
+        val missing = ForegroundClassification.Temporary("focused window root unavailable")
         val app = ForegroundClassification.Settled("app.one", "settled")
-        assertEquals(TransitionAction.Retry, stabilizer.action(app, 1_000))
-        assertEquals(TransitionAction.Apply, stabilizer.action(app, 1_100))
+        assertEquals(ForegroundRecoveryAction.Retry(33L), recovery.next(missing, 25, 25))
+        assertEquals(ForegroundRecoveryAction.Apply, recovery.next(app, 25, 58))
+        assertEquals(ForegroundRecoveryAction.Retry(33L), recovery.next(missing, 25, 2_025))
     }
 
-    @Test fun resetInvalidatesPendingDestination() {
-        val stabilizer = TransitionStabilizer()
+    @Test fun clearDestinationOnLastRetryApplies() {
+        val recovery = ForegroundRecovery()
+        val temporary = ForegroundClassification.Temporary("transition")
         val app = ForegroundClassification.Settled("app.one", "settled")
-        assertEquals(TransitionAction.Retry, stabilizer.action(app, 0))
-        stabilizer.reset()
-        assertEquals(TransitionAction.Retry, stabilizer.action(app, 100))
+        assertEquals(ForegroundRecoveryAction.Retry(325L), recovery.next(temporary, 250, 250))
+        assertEquals(ForegroundRecoveryAction.Retry(423L), recovery.next(temporary, 250, 575))
+        assertEquals(ForegroundRecoveryAction.Retry(252L), recovery.next(temporary, 250, 998))
+        assertTrue(recovery.retryExpired(1_250))
+        assertEquals(ForegroundRecoveryAction.Apply, recovery.next(app, 250, 1_250))
     }
 
-    @Test fun newerEventCancelsOldRetryToken() {
-        val session = TransitionSession()
-        val old = session.newEvent()
-        val current = session.newEvent()
-        assertFalse(session.isCurrent(old))
-        assertTrue(session.isCurrent(current))
-        session.cancel()
-        assertFalse(session.isCurrent(current))
+    @Test fun overlayStopsRecovery() {
+        val recovery = ForegroundRecovery()
+        val overlay = ForegroundClassification.Overlay("application layer persisted")
+        assertEquals(ForegroundRecoveryAction.Stop, recovery.next(overlay, 25, 0))
     }
 }
